@@ -1,11 +1,11 @@
 // src/lib/colorMath.ts
 
 export function calculateMatchScore(
-    r1: number, 
-    g1: number, 
-    b1: number, 
-    r2: number, 
-    g2: number, 
+    r1: number,
+    g1: number,
+    b1: number,
+    r2: number,
+    g2: number,
     b2: number
 ): number {
     const rDiff = r1 - r2;
