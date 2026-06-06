@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { calculateMatchScore, rgbToHex, getContrastColour } from "../lib/colourMath"
+import { calculateMatchScore, rgbToHex } from "../lib/colourMath"
 import { DailyColour } from "../types"
 
 interface ViewfinderProps {
@@ -11,44 +11,44 @@ interface ViewfinderProps {
 }
 
 export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: ViewfinderProps) {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [isStreaming, setIsStreaming] = useState(false);
     const [isShowingPhoto, setIsShowingPhoto] = useState(false);
     const [photoDataUrl, setPhotoDataUrl] = useState<string>("");
 
-    // Initialise camera after mounting to the client broswer
     useEffect(() => {
         async function startCamera() {
             try {
-                const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+                const mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false,
+                });
 
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
                     setStream(mediaStream);
                     setIsStreaming(true);
                 }
-            } catch (error) {
-                console.error("Error accessing camera:", error);
-                alert("Unable to access the camera. Please allow camera permissions and try again.");
+            } catch (err) {
+                console.error("Error accessing camera stream matrices:", err);
+                alert("Could not access camera. Ensure you are using HTTPS and have granted permissions.");
             }
         }
 
         startCamera();
 
-        // Clean up the media stream when the user leaves the page
         return () => {
             if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+                stream.getTracks().forEach((track) => track.stop());
             }
         };
     }, []);
 
     const capturePhoto = () => {
         if (isShowingPhoto) {
-            // If already showing a photo, reset to the camera view
             setIsShowingPhoto(false);
             setPhotoDataUrl("");
             onReset();
@@ -63,19 +63,16 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
 
         if (!context) return;
 
-        // Draw the current video frame to the canvas
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Sample a small area of pixels from the center of the canvas to determine the average colour
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
         const sampleSize = 5;
         const startX = centerX - sampleSize / 2;
         const startY = centerY - sampleSize / 2;
 
-        // Get pixel data from the center of the canvas
         const imgData = context.getImageData(startX, startY, sampleSize, sampleSize);
         const data = imgData.data;
 
@@ -93,7 +90,6 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
         const avgB = Math.round(totalB / pixelCount);
         const detectedHex = rgbToHex(avgR, avgG, avgB);
 
-        // Calculate the match score against the active target colour
         const matchScore = calculateMatchScore(
             activeTarget.r,
             activeTarget.g,
@@ -103,7 +99,6 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
             avgB
         );
 
-        // Pass the match score and the detected colour back to the parent component
         const dataURL = canvas.toDataURL("image/png");
         setPhotoDataUrl(dataURL);
         setIsShowingPhoto(true);
@@ -113,7 +108,7 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
 
     return (
         <div className="flex flex-col items-center w-full max-w-[400px]">
-            {/* Viewfinder Window Frame */}
+            {/* Viewfinder Frame Container Wrapper */}
             <div className="relative w-full aspect-[3/4] mb-5 rounded-xl overflow-hidden border-4 border-white shadow-lg bg-black">
                 <video
                     ref={videoRef}
@@ -131,26 +126,42 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
                     />
                 )}
 
-                {/* Central Targeting Reticle Overlay */}
                 {!isShowingPhoto && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border-3 border-white rounded shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] z-10 pointer-events-none" />
+                    <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        className="absolute inset-0 w-full h-full z-10 pointer-events-none"
+                        aria-hidden="true"
+                    >
+                        <defs>
+                            <mask id="reticle-hole">
+                                <rect x="0" y="0" width="100" height="100" fill="white" />
+                                {/* centered 12x12 square hole */}
+                                <rect x="44" y="44" width="12" height="12" fill="black" rx="2" ry="2" />
+                            </mask>
+                        </defs>
+
+                        {/* dark overlay with transparent hole */}
+                        <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#reticle-hole)" />
+
+                        {/* white hollow square border centered over the hole */}
+                        <rect x="44" y="44" width="12" height="12" fill="transparent" stroke="#ffffff" strokeWidth="1.5" rx="2" />
+                    </svg>
                 )}
             </div>
 
-            {/* Hidden processing frame buffer canvas layer */}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Dynamic Action Trigger Trigger Button */}
             <button
                 onClick={capturePhoto}
                 disabled={!isStreaming && !isShowingPhoto}
                 className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 active:scale-95 disabled:opacity-50 ${isShowingPhoto
-                    ? "bg-slate-700 hover:bg-slate-800 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                        ? "bg-slate-700 hover:bg-slate-800 text-white"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
                     }`}
             >
                 {isShowingPhoto ? "Try Again" : "Take Photo"}
             </button>
         </div>
-    );
+    )
 }
