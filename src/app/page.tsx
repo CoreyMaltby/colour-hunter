@@ -85,9 +85,9 @@ export default function Home() {
     setPlayerHex(detectedColour);
 
 
-    let currentShotBlock = "🟥";
-    if (score >= 80) currentShotBlock = "🟩";
-    else if (score >= 60) currentShotBlock = "🟨";
+    let currentShotBlock = `🟥 ${newAttemptCount}: ${score}%`;
+    if (score >= 80) currentShotBlock = `🟩 ${newAttemptCount}: ${score}%`;
+    else if (score >= 60) currentShotBlock = `🟨 ${newAttemptCount}: ${score}%`;
 
     const updatedBlocks = [...historyBlocks, currentShotBlock];
     setHistoryBlocks(updatedBlocks);
@@ -164,16 +164,33 @@ export default function Home() {
       {/*Scoreboard Component */}
       <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
 
-      {/* Attempt Tracking */}
-      <div className="mb-4 px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-black  shadow-inner tracking-widest flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-        Photos Snapped: <span className="text-blue-400">{attempts}</span>
-      </div>
-
       {/* Activity Banner */}
       <div className={`text-center text-lg mb-6 min-h-[28px] max-w-[340px] tracking-wide transition-all duration-300 ease-out ${messageColor}`}>
         {gameMessage}
       </div>
+
+      {/* Victory and Share Card */}
+      {isLockedToday && (
+        <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in z-20">
+          <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-3">Share Your Results</h3>
+          <button
+            onClick={handleCopyClipboard}
+            className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-4 flex items-center justify-center gap-2 ${shareCopied
+                ? "bg-emerald-600 text-white"
+                : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+              }`}
+          >
+            {shareCopied ? "✓ Copied!" : "📋 Copy Share Card"}
+          </button>
+
+          <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
+            <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1">Clipboard Preview</p>
+            <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
+              {previewText}
+            </pre>
+          </div>
+        </div>
+      )}
 
       <Viewfinder
         activeTarget={activeTarget}
@@ -182,31 +199,6 @@ export default function Home() {
         savedPhoto={savedPhoto}
         onReset={handleReset}
       />
-
-      {/* Victory and Share Card */}
-      {isLockedToday && (
-        <div className="w-full max-w-[400px] mt-6 p-5 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in">
-          <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-4">Share Your Results</h3>
-
-          <button
-            onClick={handleCopyClipboard}
-            className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-5 flex items-center justify-center gap-2 ${shareCopied
-              ? "bg-emerald-600 text-white animate-pulse"
-              : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
-              }`}
-          >
-            {shareCopied ? "✓ Copied!" : "📋 Copy Share Card"}
-          </button>
-
-          {/* Share Text */}
-          <div className="w-full text-left bg-slate-950 p-4 rounded-xl border border-slate-800/80 shadow-inner">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 border-b border-slate-800 pb-1">Clipboard Preview</p>
-            <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed tracking-normal">
-              {previewText}
-            </pre>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
