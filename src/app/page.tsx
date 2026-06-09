@@ -19,13 +19,18 @@ export default function Home() {
   const [attempts, setAttempts] = useState<number>(0);
   const [finalScore, setFinalScore] = useState<number>(0);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
+
+  // Game state analytics
   const [historyBlocks, setHistoryBlocks] = useState<string[]>([]);
   const [previewText, setPreviewText] = useState<string>("");
+  const [streak, setStreak] = useState<number>(0);
 
   const getDailyStorageKey = () => {
     const d = new Date();
     return `colour-hunter-game-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   };
+
+  const STATIC_STREAK_KEY = "colour-hunter-global-streak-v1";
 
   useEffect(() => {
     async function loadDailyChallenge() {
@@ -35,6 +40,29 @@ export default function Home() {
 
         const data: DailyColour = await response.json();
         setActiveTarget(data);
+
+        const savedStreakRaw = localStorage.getItem(STATIC_STREAK_KEY);
+        let activeStreak = 0;
+
+        if (savedStreakRaw) {
+          const streakData = JSON.parse(savedStreakRaw);
+          const lastWinDate = new Date(streakData.lastWinTimestamp);
+          const now = new Date();
+
+          const lastWinMidnight = new Date(lastWinDate.getFullYear(), lastWinDate.getMonth(), lastWinDate.getDate());
+          const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+          const timeDiff = todayMidnight.getTime() - lastWinMidnight.getTime();
+          const dayDiff = Math.floor(timeDiff / (1000 * 3600 * 24));
+
+          if (dayDiff <= 1) {
+            activeStreak = streakData.streakCount || 0;
+          } else {
+            activeStreak = 0;
+            localStorage.setItem(STATIC_STREAK_KEY, JSON.stringify({ streakCount: 0, lastWinTimestamp: "" }));
+          }
+        }
+        setStreak(activeStreak);
 
         const storageKey = getDailyStorageKey();
         const savedSessionData = localStorage.getItem(storageKey);
@@ -72,9 +100,9 @@ export default function Home() {
     loadDailyChallenge();
   }, []);
 
-  const generateShareText = (totalShots: number, finalAccuracy: number, target: DailyColour, blocks: string[]) => {
+  const generateShareText = (totalShots: number, finalAccuracy: number, target: DailyColour, blocks: string[], activeStreak: number) => {
     const blockGrid = blocks.join("\n");
-    const text = `Colour Hunter\nPhotos Taken: ${totalShots}\nAccuracy: ${finalAccuracy}%\nTarget: ${target.name} (${target.hex})\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
+    const text = `Colour Hunter\nPhotos Taken: ${totalShots}\nAccuracy: ${finalAccuracy}%\n🔥 Current Streak: ${activeStreak} days\nTarget: ${target.name} (${target.hex})\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
     setPreviewText(text);
   };
 
@@ -94,6 +122,37 @@ export default function Home() {
 
     const isVictoryMatch = score >= 80;
     const storageKey = getDailyStorageKey();
+
+    let runningStreak = streak;
+    if (isVictoryMatch && !isLockedToday) {
+      const savedStreakRaw = localStorage.getItem(STATIC_STREAK_KEY);
+      let prevCount = 0;
+      let hasWonTodayAlready = false;
+
+      if (savedStreakRaw) {
+        const parsedStreak = JSON.parse(savedStreakRaw);
+        prevCount = parsedStreak.streakCount || 0;
+
+        if (parsedStreak.lastWinTimestamp) {
+          const lastWin = new Date(parsedStreak.lastWinTimestamp);
+          const now = new Date();
+          if (lastWin.getFullYear() === now.getFullYear() &&
+            lastWin.getMonth() === now.getMonth() &&
+            lastWin.getDate() === now.getDate()) {
+            hasWonTodayAlready = true;
+          }
+        }
+      }
+
+      if (!hasWonTodayAlready) {
+        runningStreak = prevCount + 1;
+        setStreak(runningStreak);
+        localStorage.setItem(STATIC_STREAK_KEY, JSON.stringify({
+          streakCount: runningStreak,
+          lastWinTimestamp: new Date().toISOString()
+        }));
+      }
+    }
 
     const sessionPayload = {
       score,
@@ -115,7 +174,7 @@ export default function Home() {
       setMessageColor("text-emerald-400 font-extrabold");
 
       if (activeTarget) {
-        generateShareText(newAttemptCount, score, activeTarget, updatedBlocks);
+        generateShareText(newAttemptCount, score, activeTarget, updatedBlocks, runningStreak);
       }
     } else {
       setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
@@ -139,26 +198,22 @@ export default function Home() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading Game States...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-50 p-4 antialiased">
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-black text-white tracking-wider mb-0.5">
-          Colour Hunter
-        </h1>
-        <p className="text-[20px] font-bold text-slate-500 tracking-widest">
-          Daily Colour
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full max-w-[400px] mb-5 px-1">
+        <div className="flex flex-col text-left">
+          <h1 className="text-3xl font-black text-white tracking-wider leading-none">
+            Colour Hunter
+          </h1> 
+          <p className="text-[10px] font-bold text-slate-500  tracking-widest mt-1">
+            Daily Mode
+          </p>
+        </div>
+
+        <div className="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 shrink-0 select-none">
+          🔥 <span className="font-mono text-sm leading-none">{streak}</span>
+        </div>
       </div>
 
       {/*Scoreboard Component */}
@@ -176,8 +231,8 @@ export default function Home() {
           <button
             onClick={handleCopyClipboard}
             className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-4 flex items-center justify-center gap-2 ${shareCopied
-                ? "bg-emerald-600 text-white"
-                : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+              ? "bg-emerald-600 text-white"
+              : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
               }`}
           >
             {shareCopied ? "✓ Copied!" : "📋 Copy Share Card"}
