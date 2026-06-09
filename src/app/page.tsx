@@ -9,19 +9,23 @@ export default function Home() {
   const [activeTarget, setActiveTarget] = useState<DailyColour | null>(null);
   const [playerHex, setPlayerHex] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [gameMessage, setGameMessage] = useState<string>("Aim and take your shot!");
-  const [messageColor, setMessageColor] = useState<string>("text-slate-700");
+  const [gameMessage, setGameMessage] = useState<string>("Aim and take your Photo!");
+  const [messageColor, setMessageColor] = useState<string>("text-slate-400");
 
 
   // Game tracking metrics
   const [isLockedToday, setIsLockedToday] = useState<boolean>(false);
   const [savedPhoto, setSavedPhoto] = useState<string>("");
   const [attempts, setAttempts] = useState<number>(0);
+  const [finalScore, setFinalScore] = useState<number>(0);
+  const [shareCopied, setShareCopied] = useState<boolean>(false);
+  const [historyBlocks, setHistoryBlocks] = useState<string[]>([]);
+  const [previewText, setPreviewText] = useState<string>("");
 
   const getDailyStorageKey = () => {
     const d = new Date();
     return `colour-hunter-game-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-  }
+  };
 
   useEffect(() => {
     async function loadDailyChallenge() {
@@ -40,23 +44,26 @@ export default function Home() {
 
           setAttempts(parsedSession.attempts || 0);
 
+          const blocks = parsedSession.historyBlocks || [];
+          setHistoryBlocks(blocks);
+
           // If they previously unlocked a win code for today, trigger a strict lock
           if (parsedSession.isVictory) {
             setPlayerHex(parsedSession.playerHex);
             setSavedPhoto(parsedSession.photoDataUrl);
+            setFinalScore(parsedSession.score);
             setIsLockedToday(true);
-            setGameMessage(`Complete! Match found in ${parsedSession.attempts} photos!`);
-            setMessageColor("text-green-600 font-extrabold");
+            setGameMessage(`🎯 Complete! Match found in ${parsedSession.attempts} Photos!`);
+            setMessageColor("text-emerald-400 font-bold");
           } else {
-            // Otherwise, let them continue from where they left off with their shot count intact
-            setGameMessage(`Keep hunting! Current attempts: ${parsedSession.attempts}`);
-            setMessageColor("text-slate-600 font-medium");
+            setGameMessage(`Keep hunting! Photos taken: ${parsedSession.attempts}`);
+            setMessageColor("text-amber-400 font-medium");
           }
         }
       } catch (err) {
         console.error("Initialization pipeline crash:", err);
         setGameMessage("Could not synchronise game state parameters.");
-        setMessageColor("text-red-600");
+        setMessageColor("text-rose-500");
       } finally {
         setIsLoading(false);
       }
@@ -65,11 +72,25 @@ export default function Home() {
     loadDailyChallenge();
   }, []);
 
+  const generateShareText = (totalShots: number, finalAccuracy: number, target: DailyColour, blocks: string[]) => {
+    const blockGrid = blocks.join("\n");
+    const text = `Colour Hunter\nPhotos Taken: ${totalShots}\nAccuracy: ${finalAccuracy}%\nTarget: ${target.name} (${target.hex})\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
+    setPreviewText(text);
+  };
+
   const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
     // Increment photo submission counter
     const newAttemptCount = attempts + 1;
     setAttempts(newAttemptCount);
     setPlayerHex(detectedColour);
+
+
+    let currentShotBlock = "🟥";
+    if (score >= 80) currentShotBlock = "🟩";
+    else if (score >= 60) currentShotBlock = "🟨";
+
+    const updatedBlocks = [...historyBlocks, currentShotBlock];
+    setHistoryBlocks(updatedBlocks);
 
     const isVictoryMatch = score >= 80;
     const storageKey = getDailyStorageKey();
@@ -80,34 +101,49 @@ export default function Home() {
       photoDataUrl: isVictoryMatch ? photoDataUrl : "",
       attempts: newAttemptCount,
       isVictory: isVictoryMatch,
+      historyBlocks: updatedBlocks,
       completedAt: new Date().toISOString()
-    }
+    };
     localStorage.setItem(storageKey, JSON.stringify(sessionPayload));
 
     if (isVictoryMatch) {
       // Lock the game only if target threshold met
       setSavedPhoto(photoDataUrl);
+      setFinalScore(score);
       setIsLockedToday(true);
-      setGameMessage(`🎯 Match! ${score}% Similarity! Cleared in ${newAttemptCount} photos!`);
-      setMessageColor("text-green-600 font-extrabold animate-bounce");
+      setGameMessage(`🎯 Perfect Match! ${score}% Similarity!`);
+      setMessageColor("text-emerald-400 font-extrabold");
+
+      if (activeTarget) {
+        generateShareText(newAttemptCount, score, activeTarget, updatedBlocks);
+      }
     } else {
-      // Keep viewfinder loop unlocked but display contextual feedback tracking failure metrics
-      setGameMessage(`❌ ${score}% Match - Try Again! Total Photos: ${newAttemptCount}`);
-      setMessageColor("text-red-600 font-semibold");
+      setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
+      setMessageColor("text-rose-400 font-semibold");
     }
   };
 
   const handleReset = () => {
     setPlayerHex(null);
-    setGameMessage(`Aim and take your Photo! (Photos taken: ${attempts})`);
-    setMessageColor("text-slate-700 font-normal");
+    setGameMessage(`Aim and take your photo! (Photos taken: ${attempts})`);
+    setMessageColor("text-slate-400 font-normal");
+  };
+
+  const handleCopyClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(previewText);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch (err) {
+      console.error("Clipboard copy failure:", err);
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600 font-medium">Loading Game States...</p>
         </div>
       </div>
@@ -115,18 +151,27 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
-      <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-4">
-        Colour Hunter Prototype
-      </h1>
-
-      <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
-
-      <div className="mb-2 px-3 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-full uppercase tracking-wider">
-        Photos Taken: {attempts}
+    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-50 p-4 antialiased">
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-black text-white tracking-wider mb-0.5">
+          Colour Hunter
+        </h1>
+        <p className="text-[20px] font-bold text-slate-500 tracking-widest">
+          Daily Colour
+        </p>
       </div>
 
-      <div className={`text-center text-lg mb-4 min-h-[28px] transition-all duration-300 ${messageColor}`}>
+      {/*Scoreboard Component */}
+      <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
+
+      {/* Attempt Tracking */}
+      <div className="mb-4 px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-black  shadow-inner tracking-widest flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+        Photos Snapped: <span className="text-blue-400">{attempts}</span>
+      </div>
+
+      {/* Activity Banner */}
+      <div className={`text-center text-lg mb-6 min-h-[28px] max-w-[340px] tracking-wide transition-all duration-300 ease-out ${messageColor}`}>
         {gameMessage}
       </div>
 
@@ -137,6 +182,31 @@ export default function Home() {
         savedPhoto={savedPhoto}
         onReset={handleReset}
       />
+
+      {/* Victory and Share Card */}
+      {isLockedToday && (
+        <div className="w-full max-w-[400px] mt-6 p-5 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in">
+          <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-4">Share Your Results</h3>
+
+          <button
+            onClick={handleCopyClipboard}
+            className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-5 flex items-center justify-center gap-2 ${shareCopied
+              ? "bg-emerald-600 text-white animate-pulse"
+              : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+              }`}
+          >
+            {shareCopied ? "✓ Copied!" : "📋 Copy Share Card"}
+          </button>
+
+          {/* Share Text */}
+          <div className="w-full text-left bg-slate-950 p-4 rounded-xl border border-slate-800/80 shadow-inner">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 border-b border-slate-800 pb-1">Clipboard Preview</p>
+            <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed tracking-normal">
+              {previewText}
+            </pre>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

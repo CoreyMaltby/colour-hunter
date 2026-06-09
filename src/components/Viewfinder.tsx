@@ -112,7 +112,7 @@ export default function Viewfinder({
 
         const dataURL = canvas.toDataURL("image/png");
 
-        if (matchScore < 90) {
+        if (matchScore < 80) {
             setPhotoDataUrl(dataURL);
             setIsShowingPhoto(true);
         }
@@ -181,7 +181,7 @@ export default function Viewfinder({
             <button
                 onClick={capturePhoto}
                 disabled={(!isStreaming && !isShowingPhoto) && !isLockedToday}
-                className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 uppercase tracking-wide active:scale-95 disabled:opacity-50 ${isLockedToday
+                className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 tracking-wide active:scale-95 disabled:opacity-50 ${isLockedToday
                     ? "bg-emerald-700 text-emerald-200 cursor-not-allowed shadow-none"
                     : isShowingPhoto
                         ? "bg-slate-700 hover:bg-slate-800 text-white"
