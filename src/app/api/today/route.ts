@@ -16,10 +16,13 @@ export async function GET() {
         return NextResponse.json(targetChallange, {
             status: 200,
             headers: {
-                "Cache-Control": "no-store, max-age=0, must-revalidate",
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
             }
         });
     } catch (error) {
+        console.error("Data api router encountered an error:", error)
         return NextResponse.json(
             { error: "Internal Server Processing Exception" },
             { status: 500 }
