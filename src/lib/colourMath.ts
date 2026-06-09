@@ -1,41 +1,32 @@
-// src/lib/colorMath.ts
+import chroma from "chroma-js";
 
+/**
+ * Calculates the match score between two RGB colors using the CIE2000 standard.
+ * Delta E 2000 values typically range from 0 (identical) to 100 (complete opposites).
+ * A Delta E distance of <= 1.0 is considered an imperceptible difference to the human eye.
+ */
 export function calculateMatchScore(
-    r1: number,
-    g1: number,
-    b1: number,
-    r2: number,
-    g2: number,
-    b2: number
+    r1: number, g1: number, b1: number,
+    r2: number, g2: number, b2: number
 ): number {
-    const rDiff = r1 - r2;
-    const gDiff = g1 - g2;
-    const bDiff = b1 - b2;
+    const colour1 = chroma(r1, g1, b1);
+    const colour2 = chroma(r2, g2, b2);
 
-    const meanR = (r1 + r2) / 2;
+    const deltaE = chroma.deltaE(colour1, colour2)
 
-    // Weighted Euclidean formula components
-    const weightR = 2 + (meanR / 256);
-    const weightG = 4;
-    const weightB = 2 + ((255 - meanR) / 256);
+    const maxAllowableDistance = 30;
 
-    const distance = Math.sqrt(
-        (weightR * Math.pow(rDiff, 2)) +
-        (weightG * Math.pow(gDiff, 2)) +
-        (weightB * Math.pow(bDiff, 2))
-    );
+    if (deltaE >= maxAllowableDistance) {
+        return 0;
+    }
 
-    const maxPerceptualDistance = 764.833; // Maximum distance in the weighted RGB space
+    const scorePercentage = (1 - deltaE / maxAllowableDistance) * 100;
 
-    const scorePercentage = (1 - (distance / maxPerceptualDistance)) * 100;
-    return Math.max(0, Math.round(scorePercentage));
+    return Math.max(0, Math.round(scorePercentage))
 }
 
 export function rgbToHex(r: number, g: number, b: number): string {
-    return "#" + [r, g, b].map(x => {
-        const hex = x.toString(16);
-        return hex.length === 1 ? "0" + hex : hex;
-    }).join("").toUpperCase();
+    return chroma(r, g, b).hex().toUpperCase();
 }
 
 // Determine contrasting text color (black or white) based on background brightness
@@ -43,6 +34,6 @@ export function getContrastColour(r: number, g: number, b: number): string {
     const red = Number(r);
     const green = Number(g);
     const blue = Number(b);
-    const brightness = (red * 0.299 + green * 0.587 + blue * 0.114);
-    return brightness > 186 ? '#000000' : '#ffffff';
+    const brightness = red * 0.299 + green * 0.587 + blue * 0.114;
+    return brightness > 186 ? "#000000" : "#ffffff";
 }

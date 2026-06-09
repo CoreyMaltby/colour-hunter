@@ -71,7 +71,7 @@ export default function Home() {
     setAttempts(newAttemptCount);
     setPlayerHex(detectedColour);
 
-    const isVictoryMatch = score >= 90;
+    const isVictoryMatch = score >= 80;
     const storageKey = getDailyStorageKey();
 
     const sessionPayload = {
