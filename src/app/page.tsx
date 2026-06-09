@@ -174,10 +174,6 @@ export default function Home() {
       setIsLockedToday(true);
       setGameMessage(`🎯 Perfect Match! ${score}% Similarity!`);
       setMessageColor("text-emerald-400 font-extrabold");
-
-      if (activeTarget) {
-        generateShareText(newAttemptCount, score, activeTarget, updatedBlocks, runningStreak);
-      }
     } else {
       setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
       setMessageColor("text-rose-400 font-semibold");
