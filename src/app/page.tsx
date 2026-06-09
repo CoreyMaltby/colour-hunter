@@ -12,6 +12,17 @@ export default function Home() {
   const [gameMessage, setGameMessage] = useState<string>("Aim and take your shot!");
   const [messageColor, setMessageColor] = useState<string>("text-slate-700");
 
+
+  // Game tracking metrics
+  const [isLockedToday, setIsLockedToday] = useState<boolean>(false);
+  const [savedPhoto, setSavedPhoto] = useState<string>("");
+  const [attempts, setAttempts] = useState<number>(0);
+
+  const getDailyStorageKey = () => {
+    const d = new Date();
+    return `colour-hunter-game-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
   useEffect(() => {
     async function loadDailyChallenge() {
       try {
@@ -20,9 +31,31 @@ export default function Home() {
 
         const data: DailyColour = await response.json();
         setActiveTarget(data);
+
+        const storageKey = getDailyStorageKey();
+        const savedSessionData = localStorage.getItem(storageKey);
+
+        if (savedSessionData) {
+          const parsedSession = JSON.parse(savedSessionData);
+
+          setAttempts(parsedSession.attempts || 0);
+
+          // If they previously unlocked a win code for today, trigger a strict lock
+          if (parsedSession.isVictory) {
+            setPlayerHex(parsedSession.playerHex);
+            setSavedPhoto(parsedSession.photoDataUrl);
+            setIsLockedToday(true);
+            setGameMessage(`Complete! Match found in ${parsedSession.attempts} photos!`);
+            setMessageColor("text-green-600 font-extrabold");
+          } else {
+            // Otherwise, let them continue from where they left off with their shot count intact
+            setGameMessage(`Keep hunting! Current attempts: ${parsedSession.attempts}`);
+            setMessageColor("text-slate-600 font-medium");
+          }
+        }
       } catch (err) {
-        console.error("Failed to query target matrix parameters:", err);
-        setGameMessage("Could not load today's challenge color. Check local server connection.");
+        console.error("Initialization pipeline crash:", err);
+        setGameMessage("Could not synchronise game state parameters.");
         setMessageColor("text-red-600");
       } finally {
         setIsLoading(false);
@@ -32,22 +65,41 @@ export default function Home() {
     loadDailyChallenge();
   }, []);
 
-  const handlePhotoCaptured = (score: number, detectedColor: string) => {
-    // Save the hex code to state to render the color on the scoreboard
-    setPlayerHex(detectedColor);
+  const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
+    // Increment photo submission counter
+    const newAttemptCount = attempts + 1;
+    setAttempts(newAttemptCount);
+    setPlayerHex(detectedColour);
 
-    if (score >= 90) {
-      setGameMessage(`Match! ${score}% Similarity!`);
+    const isVictoryMatch = score >= 90;
+    const storageKey = getDailyStorageKey();
+
+    const sessionPayload = {
+      score,
+      playerHex: detectedColour,
+      photoDataUrl: isVictoryMatch ? photoDataUrl : "",
+      attempts: newAttemptCount,
+      isVictory: isVictoryMatch,
+      completedAt: new Date().toISOString()
+    }
+    localStorage.setItem(storageKey, JSON.stringify(sessionPayload));
+
+    if (isVictoryMatch) {
+      // Lock the game only if target threshold met
+      setSavedPhoto(photoDataUrl);
+      setIsLockedToday(true);
+      setGameMessage(`🎯 Match! ${score}% Similarity! Cleared in ${newAttemptCount} photos!`);
       setMessageColor("text-green-600 font-extrabold animate-bounce");
     } else {
-      setGameMessage(`Try Again! ${score}% Similarity`);
+      // Keep viewfinder loop unlocked but display contextual feedback tracking failure metrics
+      setGameMessage(`❌ ${score}% Match - Try Again! Total Photos: ${newAttemptCount}`);
       setMessageColor("text-red-600 font-semibold");
     }
   };
 
   const handleReset = () => {
     setPlayerHex(null);
-    setGameMessage("Aim and take your shot!");
+    setGameMessage(`Aim and take your Photo! (Photos taken: ${attempts})`);
     setMessageColor("text-slate-700 font-normal");
   };
 
@@ -56,7 +108,7 @@ export default function Home() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading Colour Input Logic...</p>
+          <p className="text-gray-600 font-medium">Loading Game States...</p>
         </div>
       </div>
     );
@@ -70,13 +122,19 @@ export default function Home() {
 
       <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
 
+      <div className="mb-2 px-3 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-full uppercase tracking-wider">
+        Photos Taken: {attempts}
+      </div>
+
       <div className={`text-center text-lg mb-4 min-h-[28px] transition-all duration-300 ${messageColor}`}>
         {gameMessage}
       </div>
 
-      <Viewfinder 
+      <Viewfinder
         activeTarget={activeTarget}
         onPhotoCaptured={handlePhotoCaptured}
+        isLockedToday={isLockedToday}
+        savedPhoto={savedPhoto}
         onReset={handleReset}
       />
     </main>

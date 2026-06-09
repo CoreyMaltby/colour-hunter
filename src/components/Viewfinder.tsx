@@ -6,11 +6,19 @@ import { DailyColour } from "../types"
 
 interface ViewfinderProps {
     activeTarget: DailyColour | null;
-    onPhotoCaptured: (score: number, playerHex: string) => void;
+    onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
+    isLockedToday: boolean;
+    savedPhoto: string;
     onReset: () => void;
 }
 
-export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: ViewfinderProps) {
+export default function Viewfinder({
+    activeTarget,
+    onPhotoCaptured,
+    isLockedToday,
+    savedPhoto,
+    onReset
+}: ViewfinderProps) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -19,7 +27,10 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
     const [isShowingPhoto, setIsShowingPhoto] = useState(false);
     const [photoDataUrl, setPhotoDataUrl] = useState<string>("");
 
+    // Initialize camera streams only if the player hasn't already locked today's puzzle attempt
     useEffect(() => {
+        if (isLockedToday) return;
+
         async function startCamera() {
             try {
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -33,11 +44,10 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
                     setIsStreaming(true);
                 }
             } catch (err) {
-                console.error("Error accessing camera stream matrices:", err);
+                console.error("Error accessing camera stream:", err);
                 alert("Could not access camera. Ensure you are using HTTPS and have granted permissions.");
             }
         }
-
         startCamera();
 
         return () => {
@@ -49,13 +59,14 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
 
     const capturePhoto = () => {
         if (isShowingPhoto) {
+            // User clicked "Try Again" on an unsuccessful attempt
             setIsShowingPhoto(false);
             setPhotoDataUrl("");
             onReset();
             return;
         }
 
-        if (!isStreaming || !videoRef.current || !canvasRef.current || !activeTarget) return;
+        if (isLockedToday || !isStreaming || !videoRef.current || !canvasRef.current || !activeTarget) return;
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -100,53 +111,68 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
         );
 
         const dataURL = canvas.toDataURL("image/png");
-        setPhotoDataUrl(dataURL);
-        setIsShowingPhoto(true);
 
-        onPhotoCaptured(matchScore, detectedHex);
+        if (matchScore < 90) {
+            setPhotoDataUrl(dataURL);
+            setIsShowingPhoto(true);
+        }
+
+        onPhotoCaptured(matchScore, detectedHex, dataURL);
     };
 
     return (
         <div className="flex flex-col items-center w-full max-w-[400px]">
-            {/* Viewfinder Frame Container Wrapper */}
+            {/* Bounding Viewfinder Frame Wrapper */}
             <div className="relative w-full aspect-[3/4] mb-5 rounded-xl overflow-hidden border-4 border-white shadow-lg bg-black">
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-200 ${isShowingPhoto ? "opacity-0 pointer-events-none" : "opacity-100"
-                        }`}
-                />
+                {!isLockedToday ? (
+                    <>
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-200 ${isShowingPhoto ? "opacity-0 pointer-events-none" : "opacity-100"
+                                }`}
+                        />
 
-                {isShowingPhoto && (
+                        {isShowingPhoto && (
+                            <img
+                                src={photoDataUrl}
+                                alt="Your un-successful capture attempt"
+                                className="absolute top-0 left-0 w-full h-full object-cover"
+                            />
+                        )}
+
+                        {/* Central Targeting Reticle Overlay */}
+                        {!isShowingPhoto && (
+                            <svg
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                                className="absolute inset-0 w-full h-full z-10 pointer-events-none"
+                                aria-hidden="true"
+                            >
+                                <defs>
+                                    <mask id="reticle-hole">
+                                        <rect x="0" y="0" width="100" height="100" fill="white" />
+                                        {/* centered 12x12 square hole */}
+                                        <rect x="44" y="44" width="12" height="12" fill="black" rx="2" ry="2" />
+                                    </mask>
+                                </defs>
+
+                                {/* dark overlay with transparent hole */}
+                                <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#reticle-hole)" />
+
+                                {/* white hollow square border centered over the hole */}
+                                <rect x="44" y="44" width="12" height="12" fill="transparent" stroke="#ffffff" strokeWidth="1.5" rx="2" />
+                            </svg>
+                        )}
+                    </>
+                ) : (
+                    /* Render the permanent winning target snapshot once matched successfully */
                     <img
-                        src={photoDataUrl}
-                        alt="Your captured frame"
+                        src={savedPhoto}
+                        alt="Your victory submission frame"
                         className="absolute top-0 left-0 w-full h-full object-cover"
                     />
-                )}
-
-                {!isShowingPhoto && (
-                    <svg
-                        viewBox="0 0 100 100"
-                        preserveAspectRatio="none"
-                        className="absolute inset-0 w-full h-full z-10 pointer-events-none"
-                        aria-hidden="true"
-                    >
-                        <defs>
-                            <mask id="reticle-hole">
-                                <rect x="0" y="0" width="100" height="100" fill="white" />
-                                {/* centered 12x12 square hole */}
-                                <rect x="44" y="44" width="12" height="12" fill="black" rx="2" ry="2" />
-                            </mask>
-                        </defs>
-
-                        {/* dark overlay with transparent hole */}
-                        <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#reticle-hole)" />
-
-                        {/* white hollow square border centered over the hole */}
-                        <rect x="44" y="44" width="12" height="12" fill="transparent" stroke="#ffffff" strokeWidth="1.5" rx="2" />
-                    </svg>
                 )}
             </div>
 
@@ -154,14 +180,16 @@ export default function Viewfinder({ activeTarget, onPhotoCaptured, onReset }: V
 
             <button
                 onClick={capturePhoto}
-                disabled={!isStreaming && !isShowingPhoto}
-                className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 active:scale-95 disabled:opacity-50 ${isShowingPhoto
+                disabled={(!isStreaming && !isShowingPhoto) && !isLockedToday}
+                className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 uppercase tracking-wide active:scale-95 disabled:opacity-50 ${isLockedToday
+                    ? "bg-emerald-700 text-emerald-200 cursor-not-allowed shadow-none"
+                    : isShowingPhoto
                         ? "bg-slate-700 hover:bg-slate-800 text-white"
                         : "bg-blue-600 hover:bg-blue-700 text-white"
                     }`}
             >
-                {isShowingPhoto ? "Try Again" : "Take Photo"}
+                {isLockedToday ? "✓ Entry Logged" : isShowingPhoto ? "Try Again" : "Take Photo"}
             </button>
         </div>
-    )
+    );
 }
