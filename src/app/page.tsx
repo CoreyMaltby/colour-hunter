@@ -100,11 +100,13 @@ export default function Home() {
     loadDailyChallenge();
   }, []);
 
-  const generateShareText = (totalShots: number, finalAccuracy: number, target: DailyColour, blocks: string[], activeStreak: number) => {
-    const blockGrid = blocks.join("\n");
-    const text = `Colour Hunter\nPhotos Taken: ${totalShots}\nAccuracy: ${finalAccuracy}%\n🔥 Current Streak: ${activeStreak} days\nTarget: ${target.name} (${target.hex})\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
-    setPreviewText(text);
-  };
+  useEffect(() => {
+    if (isLockedToday && activeTarget && historyBlocks.length > 0) {
+      const blockGrid = historyBlocks.join("\n");
+      const text = `Colour Hunter\nPhotos Taken: ${attempts}\nFinal Accuracy: ${finalScore}%\n🔥 Current Streak: ${streak} days\nTarget: ${activeTarget.name}\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
+      setPreviewText(text);
+    }
+  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak]);
 
   const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
     // Increment photo submission counter
@@ -205,7 +207,7 @@ export default function Home() {
         <div className="flex flex-col text-left">
           <h1 className="text-3xl font-black text-white tracking-wider leading-none">
             Colour Hunter
-          </h1> 
+          </h1>
           <p className="text-[10px] font-bold text-slate-500  tracking-widest mt-1">
             Daily Mode
           </p>
@@ -235,7 +237,7 @@ export default function Home() {
               : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
               }`}
           >
-            {shareCopied ? "✓ Copied!" : "📋 Copy Share Card"}
+            {shareCopied ? "✓ Copied!" : "📋 Copy Text"}
           </button>
 
           <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
