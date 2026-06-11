@@ -1,195 +1,223 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { calculateMatchScore, rgbToHex } from "../lib/colourMath"
-import { DailyColour } from "../types"
+import { useEffect, useRef, useState } from "react";
+import { calculateMatchScore } from "../lib/colourMath";
+import { DailyColour } from "../types";
 
 interface ViewfinderProps {
-    activeTarget: DailyColour | null;
-    onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
-    isLockedToday: boolean;
-    savedPhoto: string;
-    onReset: () => void;
+  activeTarget: DailyColour | null;
+  onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
+  isLockedToday: boolean;
+  savedPhoto: string;
+  onReset: () => void;
 }
 
 export default function Viewfinder({
-    activeTarget,
-    onPhotoCaptured,
-    isLockedToday,
-    savedPhoto,
-    onReset
+  activeTarget,
+  onPhotoCaptured,
+  isLockedToday,
+  savedPhoto,
+  onReset
 }: ViewfinderProps) {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const [stream, setStream] = useState<MediaStream | null>(null);
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [isShowingPhoto, setIsShowingPhoto] = useState(false);
-    const [photoDataUrl, setPhotoDataUrl] = useState<string>("");
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [hasCameraError, setHasCameraError] = useState<boolean>(false);
+  const [isShowingPhoto, setIsShowingPhoto] = useState<boolean>(false);
+  const [localPhotoUrl, setLocalPhotoUrl] = useState<string>("");
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
-    // Initialize camera streams only if the player hasn't already locked today's puzzle attempt
-    useEffect(() => {
-        if (isLockedToday) return;
+  useEffect(() => {
+    if (isLockedToday) {
+      if (savedPhoto) {
+        setLocalPhotoUrl(savedPhoto);
+        setIsShowingPhoto(true);
+      }
+      return;
+    }
 
-        async function startCamera() {
-            try {
-                const mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false,
-                });
-
-                if (videoRef.current) {
-                    videoRef.current.srcObject = mediaStream;
-                    setStream(mediaStream);
-                    setIsStreaming(true);
-                }
-            } catch (err) {
-                console.error("Error accessing camera stream:", err);
-                alert("Could not access camera. Ensure you are using HTTPS and have granted permissions.");
-            }
+    async function setupCameraStream() {
+      try {
+        setHasCameraError(false);
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
         }
-        startCamera();
 
-        return () => {
-            if (stream) {
-                stream.getTracks().forEach((track) => track.stop());
-            }
+        const videoConstraints: MediaTrackConstraints = {
+          facingMode: facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         };
-    }, []);
 
-    const capturePhoto = () => {
-        if (isShowingPhoto) {
-            // User clicked "Try Again" on an unsuccessful attempt
-            setIsShowingPhoto(false);
-            setPhotoDataUrl("");
-            onReset();
-            return;
+        const hardwareStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+
+        setStream(hardwareStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = hardwareStream;
         }
+      } catch (err) {
+        console.error("Camera interface initialization fault:", err);
+        setHasCameraError(true);
+      }
+    }
+    setupCameraStream();
 
-        if (isLockedToday || !isStreaming || !videoRef.current || !canvasRef.current || !activeTarget) return;
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext("2d");
-
-        if (!context) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const sampleSize = 5;
-        const startX = centerX - sampleSize / 2;
-        const startY = centerY - sampleSize / 2;
-
-        const imgData = context.getImageData(startX, startY, sampleSize, sampleSize);
-        const data = imgData.data;
-
-        let totalR = 0, totalG = 0, totalB = 0;
-        const pixelCount = data.length / 4;
-
-        for (let i = 0; i < data.length; i += 4) {
-            totalR += data[i];
-            totalG += data[i + 1];
-            totalB += data[i + 2];
-        }
-
-        const avgR = Math.round(totalR / pixelCount);
-        const avgG = Math.round(totalG / pixelCount);
-        const avgB = Math.round(totalB / pixelCount);
-        const detectedHex = rgbToHex(avgR, avgG, avgB);
-
-        const matchScore = calculateMatchScore(
-            activeTarget.r,
-            activeTarget.g,
-            activeTarget.b,
-            avgR,
-            avgG,
-            avgB
-        );
-
-        const dataURL = canvas.toDataURL("image/png");
-
-        if (matchScore < 80) {
-            setPhotoDataUrl(dataURL);
-            setIsShowingPhoto(true);
-        }
-
-        onPhotoCaptured(matchScore, detectedHex, dataURL);
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
     };
+  }, [isLockedToday, savedPhoto, facingMode]);
 
-    return (
-        <div className="flex flex-col items-center w-full max-w-[400px]">
-            {/* Bounding Viewfinder Frame Wrapper */}
-            <div className="relative w-full aspect-[3/4] mb-5 rounded-xl overflow-hidden border-4 border-white shadow-lg bg-black">
-                {!isLockedToday ? (
-                    <>
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-200 ${isShowingPhoto ? "opacity-0 pointer-events-none" : "opacity-100"
-                                }`}
-                        />
+  const handleToggleLensFacing = () => {
+    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+  };
 
-                        {isShowingPhoto && (
-                            <img
-                                src={photoDataUrl}
-                                alt="Your un-successful capture attempt"
-                                className="absolute top-0 left-0 w-full h-full object-cover"
-                            />
-                        )}
+  const handleCapturePhotoAction = () => {
+    if (!videoRef.current || !canvasRef.current || !activeTarget) return;
 
-                        {/* Central Targeting Reticle Overlay */}
-                        {!isShowingPhoto && (
-                            <svg
-                                viewBox="0 0 100 100"
-                                preserveAspectRatio="none"
-                                className="absolute inset-0 w-full h-full z-10 pointer-events-none"
-                                aria-hidden="true"
-                            >
-                                <defs>
-                                    <mask id="reticle-hole">
-                                        <rect x="0" y="0" width="100" height="100" fill="white" />
-                                        {/* centered 12x12 square hole */}
-                                        <rect x="44" y="44" width="12" height="12" fill="black" rx="2" ry="2" />
-                                    </mask>
-                                </defs>
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-                                {/* dark overlay with transparent hole */}
-                                <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#reticle-hole)" />
+    const videoWidth = video.videoWidth || 640;
+    const videoHeight = video.videoHeight || 480;
 
-                                {/* white hollow square border centered over the hole */}
-                                <rect x="44" y="44" width="12" height="12" fill="transparent" stroke="#ffffff" strokeWidth="1.5" rx="2" />
-                            </svg>
-                        )}
-                    </>
-                ) : (
-                    /* Render the permanent winning target snapshot once matched successfully */
-                    <img
-                        src={savedPhoto}
-                        alt="Your victory submission frame"
-                        className="absolute top-0 left-0 w-full h-full object-cover"
-                    />
-                )}
-            </div>
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
 
-            <canvas ref={canvasRef} className="hidden" />
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
 
-            <button
-                onClick={capturePhoto}
-                disabled={(!isStreaming && !isShowingPhoto) && !isLockedToday}
-                className={`w-full py-3.5 text-base font-bold rounded-lg shadow-md transition-all duration-200 tracking-wide active:scale-95 disabled:opacity-50 ${isLockedToday
-                    ? "bg-emerald-700 text-emerald-200 cursor-not-allowed shadow-none"
-                    : isShowingPhoto
-                        ? "bg-slate-700 hover:bg-slate-800 text-white"
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                    }`}
-            >
-                {isLockedToday ? "✓ Entry Logged" : isShowingPhoto ? "Try Again" : "Take Photo"}
-            </button>
-        </div>
+    if (facingMode === "user") {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    ctx.restore();
+
+    const dataURL = canvas.toDataURL("image/jpeg", 0.85);
+
+    const pixelSample = ctx.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+    const detectedR = pixelSample[0];
+    const detectedG = pixelSample[1];
+    const detectedB = pixelSample[2];
+
+    const convertToHex = (r: number, g: number, b: number) => {
+      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
+    };
+    const playerHexOutputStr = convertToHex(detectedR, detectedG, detectedB);
+
+    const matchScore = calculateMatchScore(
+      activeTarget.r, activeTarget.g, activeTarget.b,
+      detectedR, detectedG, detectedB
     );
+
+    setLocalPhotoUrl(dataURL);
+    setIsShowingPhoto(true);
+
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    onPhotoCaptured(matchScore, playerHexOutputStr, dataURL);
+  };
+
+  const handleClearCaptureReset = () => {
+    setIsShowingPhoto(false);
+    setLocalPhotoUrl("");
+    onReset();
+  };
+
+  return (
+    <div className="w-full max-w-[400px] flex flex-col items-center">
+      <div className="w-full aspect-[3/4] bg-black rounded-xl overflow-hidden mb-5 border-4 border-white shadow-lg relative">
+        
+        {!isShowingPhoto && !hasCameraError && (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute top-0 left-0 w-full h-full object-cover"
+            style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+          />
+        )}
+
+        {isShowingPhoto && (
+          <img
+            src={localPhotoUrl}
+            alt="Captured hunt snapshot results frame"
+            className="absolute top-0 left-0 w-full h-full object-cover"
+          />
+        )}
+
+        {!isShowingPhoto && !hasCameraError && (
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 w-full h-full z-10 pointer-events-none"
+            aria-hidden="true"
+          >
+            <defs>
+              <mask id="reticle-hole">
+                <rect x="0" y="0" width="100" height="100" fill="white" />
+                <rect x="44" y="44" width="12" height="12" fill="black" rx="2" ry="2" />
+              </mask>
+            </defs>
+            <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#reticle-hole)" />
+            <rect x="44" y="44" width="12" height="12" fill="transparent" stroke="#ffffff" strokeWidth="1.5" rx="2" />
+          </svg>
+        )}
+
+        {hasCameraError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-950/90 z-30">
+            <span className="text-3xl mb-2">🛑</span>
+            <h4 className="text-sm font-black uppercase text-slate-200 tracking-wider">Camera Permissions Blocked</h4>
+            <p className="text-xs text-slate-500 mt-2 max-w-[280px] leading-relaxed">
+              Please grant camera access or authorize the stream inside your browser settings!
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="w-full flex flex-col gap-3 px-1">
+        {!isLockedToday && !isShowingPhoto && !hasCameraError && (
+          <button
+            onClick={handleCapturePhotoAction}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
+          >
+            📷 Take Photo
+          </button>
+        )}
+
+        {!isLockedToday && isShowingPhoto && (
+          <button
+            onClick={handleClearCaptureReset}
+            className="w-full py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
+          >
+           🔄 Try Again
+          </button>
+        )}
+
+        {!isShowingPhoto && !hasCameraError && (
+          <button
+            onClick={handleToggleLensFacing}
+            type="button"
+            className="w-full py-2.5 bg-white/10 hover:bg-white/10 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm select-none active:scale-95"
+          >
+            {facingMode === "environment" ? "🔄 Switch to Front Camera" : "🔄 Switch to Back Camera"}
+          </button>
+        )}
+      </div>
+
+      <canvas ref={canvasRef} className="hidden" />
+    </div>
+  );
 }
