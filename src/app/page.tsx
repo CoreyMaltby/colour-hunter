@@ -245,13 +245,6 @@ export default function Home() {
     }
   };
 
-  const handleReset = () => {
-    setPlayerHex(null);
-    setGameMessage(`Aim and take your Photo! (Photos taken: ${attempts}/${maxAttemptsAllowed})`);
-    setMessageColor("text-slate-400 font-normal");
-  };
-
-
   const handleCopyClipboard = async () => {
     try {
       await navigator.clipboard.writeText(previewText);
@@ -390,7 +383,6 @@ export default function Home() {
               onPhotoCaptured={handlePhotoCaptured}
               isLockedToday={isLockedToday}
               savedPhoto={savedPhoto}
-              onReset={handleReset}
             />
 
             {attempts > 0 && (

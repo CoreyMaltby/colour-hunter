@@ -9,7 +9,6 @@ interface ViewfinderProps {
   onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
   isLockedToday: boolean;
   savedPhoto: string;
-  onReset: () => void;
 }
 
 export default function Viewfinder({
@@ -17,7 +16,6 @@ export default function Viewfinder({
   onPhotoCaptured,
   isLockedToday,
   savedPhoto,
-  onReset
 }: ViewfinderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -120,19 +118,7 @@ export default function Viewfinder({
     );
 
     setLocalPhotoUrl(dataURL);
-    setIsShowingPhoto(true);
-
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-
     onPhotoCaptured(matchScore, playerHexOutputStr, dataURL);
-  };
-
-  const handleClearCaptureReset = () => {
-    setIsShowingPhoto(false);
-    setLocalPhotoUrl("");
-    onReset();
   };
 
   return (
@@ -188,21 +174,12 @@ export default function Viewfinder({
       </div>
 
       <div className="w-full flex flex-col gap-3 px-1">
-        {!isLockedToday && !isShowingPhoto && !hasCameraError && (
+        {!isLockedToday && !hasCameraError && (
           <button
             onClick={handleCapturePhotoAction}
             className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
           >
             📷 Take Photo
-          </button>
-        )}
-
-        {!isLockedToday && isShowingPhoto && (
-          <button
-            onClick={handleClearCaptureReset}
-            className="w-full py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
-          >
-           🔄 Try Again
           </button>
         )}
 
