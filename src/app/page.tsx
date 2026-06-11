@@ -2,11 +2,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Viewfinder from "../components/Viewfinder";
 import Scoreboard from "../components/Scoreboard";
 import { DailyColour } from "../types";
 
 export default function Home() {
+  const router = useRouter();
   const [activeTarget, setActiveTarget] = useState<DailyColour | null>(null);
   const [playerHex, setPlayerHex] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -166,7 +168,7 @@ export default function Home() {
         }));
       }
     }
-    
+
     localStorage.setItem(storageKey, JSON.stringify({
       score,
       playerHex: detectedColour,
@@ -175,6 +177,8 @@ export default function Home() {
       isVictory: isVictoryMatch,
       historyBlocks: updatedBlocks,
       difficulty,
+      targetName: activeTarget?.name,
+      targetHex: activeTarget?.hex,
       completedAt: new Date().toISOString()
     }));
 
@@ -240,8 +244,18 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 shrink-0 select-none">
-          🔥 <span className="font-mono text-sm leading-none">{streak}</span>
+        <div className="flex items-center gap-2 shrink-0 select-none">
+          {/* History Link*/}
+          <button
+            onClick={() => router.push("/archive")}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white hover:text-slate-200 text-xs font-bold rounded-xl shadow-sm transition-all tracking-wider cursor-pointer"
+          >
+            📖 History
+          </button>
+
+          <div className="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5">
+            🔥 <span className="font-mono text-sm leading-none">{streak}</span>
+          </div>
         </div>
       </div>
 
@@ -263,70 +277,72 @@ export default function Home() {
         </button>
       </div>
 
-      {isLoading ? (
-        <div className="h-[200px] flex items-center justify-center">
-          <div className="w-8 h-8 animate-spin" />
-        </div>
-      ) : (
-        <>
-          {/*Scoreboard Component */}
-          <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
-
-          <div className="mb-4 px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-black shadow-inner tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            Photos Taken: <span className="text-blue-400">{attempts}</span>
+      {
+        isLoading ? (
+          <div className="h-[200px] flex items-center justify-center">
+            <div className="w-8 h-8 animate-spin" />
           </div>
+        ) : (
+          <>
+            {/*Scoreboard Component */}
+            <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
 
-          {/* Activity Banner */}
-          <div className={`text-center text-lg mb-6 min-h-[28px] max-w-[340px] tracking-wide transition-all duration-300 ease-out ${messageColor}`}>
-            {gameMessage}
-          </div>
-
-          {/* Victory and Share Card */}
-          {isLockedToday && (
-            <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in z-20">
-              <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-3">Share Your Results</h3>
-
-              <div className="grid grid-cols-2 gap-3 w-full mb-4">
-                <button
-                  onClick={handleCopyClipboard}
-                  className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${shareCopied
-                    ? "bg-emerald-600 text-white shadow-emerald-900/30"
-                    : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
-                    }`}
-                >
-                  {shareCopied ? "✓ Text Copied!" : "📋 Copy Score Text"}
-                </button>
-
-                <button
-                  onClick={handleCopyImageToClipboard}
-                  className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${imageCopied
-                    ? "bg-emerald-600 text-white shadow-emerald-900/30"
-                    : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
-                    }`}
-                >
-                  {imageCopied ? "✓ Photo Copied!" : "📸 Copy Victory Photo"}
-                </button>
-              </div>
-
-              <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
-                <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1 -b">Clipboard Preview</p>
-                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
-                  {previewText}
-                </pre>
-              </div>
+            <div className="mb-4 px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-black shadow-inner tracking-widest flex items-center gap-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              Photos Taken: <span className="text-blue-400">{attempts}</span>
             </div>
-          )}
 
-          <Viewfinder
-            activeTarget={activeTarget}
-            onPhotoCaptured={handlePhotoCaptured}
-            isLockedToday={isLockedToday}
-            savedPhoto={savedPhoto}
-            onReset={handleReset}
-          />
-        </>
-      )}
-    </main>
+            {/* Activity Banner */}
+            <div className={`text-center text-lg mb-6 min-h-[28px] max-w-[340px] tracking-wide transition-all duration-300 ease-out ${messageColor}`}>
+              {gameMessage}
+            </div>
+
+            {/* Victory and Share Card */}
+            {isLockedToday && (
+              <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in z-20">
+                <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-3">Share Your Results</h3>
+
+                <div className="grid grid-cols-2 gap-3 w-full mb-4">
+                  <button
+                    onClick={handleCopyClipboard}
+                    className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${shareCopied
+                      ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                      : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                      }`}
+                  >
+                    {shareCopied ? "✓ Text Copied!" : "📋 Copy Score Text"}
+                  </button>
+
+                  <button
+                    onClick={handleCopyImageToClipboard}
+                    className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${imageCopied
+                      ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                      : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                      }`}
+                  >
+                    {imageCopied ? "✓ Photo Copied!" : "📸 Copy Victory Photo"}
+                  </button>
+                </div>
+
+                <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
+                  <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1">Clipboard Preview</p>
+                  <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
+                    {previewText}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            <Viewfinder
+              activeTarget={activeTarget}
+              onPhotoCaptured={handlePhotoCaptured}
+              isLockedToday={isLockedToday}
+              savedPhoto={savedPhoto}
+              onReset={handleReset}
+            />
+          </>
+        )
+      }
+    </main >
   );
 }
