@@ -213,18 +213,18 @@ export default function Home() {
 
     try {
       const base64Response = await fetch(savedPhoto);
-      const imageBlod = await base64Response.blob();
+      const imageBlob = await base64Response.blob();
 
       await navigator.clipboard.write([
         new ClipboardItem({
-          [imageBlod.type]: imageBlod
+          [imageBlob.type]: imageBlob
         })
       ]);
 
       setImageCopied(true);
       setTimeout(() => setImageCopied(false), 3000);
-    } catch (errror) {
-      console.error("Image clipboard copying falied:", errror);
+    } catch (error) {
+      console.error("Image clipboard copying falied:", error);
       alert("Your browser or device does not support copying image to clipboard. You can long-press the image to save manually!");
     }
   };
