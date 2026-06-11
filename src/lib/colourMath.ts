@@ -7,14 +7,15 @@ import chroma from "chroma-js";
  */
 export function calculateMatchScore(
     r1: number, g1: number, b1: number,
-    r2: number, g2: number, b2: number
+    r2: number, g2: number, b2: number,
+    difficulty: "normal" | "hard" = "normal"
 ): number {
     const colour1 = chroma(r1, g1, b1);
     const colour2 = chroma(r2, g2, b2);
 
     const deltaE = chroma.deltaE(colour1, colour2)
 
-    const maxAllowableDistance = 30;
+    const maxAllowableDistance = difficulty === "hard" ? 20 : 30;
 
     if (deltaE >= maxAllowableDistance) {
         return 0;

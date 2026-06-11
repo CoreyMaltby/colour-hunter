@@ -383,6 +383,7 @@ export default function Home() {
               onPhotoCaptured={handlePhotoCaptured}
               isLockedToday={isLockedToday}
               savedPhoto={savedPhoto}
+              difficulty={difficulty}
             />
 
             {attempts > 0 && (
