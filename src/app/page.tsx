@@ -29,6 +29,7 @@ export default function Home() {
   const [streak, setStreak] = useState<number>(0);
 
   const [difficulty, setDifficulty] = useState<"normal" | "hard">("normal");
+  const maxAttemptsAllowed = difficulty === "hard" ? 15 : 20;
 
   const getDailyStorageKey = (mode: "normal" | "hard") => {
     const d = new Date();
@@ -53,6 +54,8 @@ export default function Home() {
       const storageKey = getDailyStorageKey(modeSelection);
       const savedSessionData = localStorage.getItem(storageKey);
 
+      const loadedMax = modeSelection === "hard" ? 15 : 20;
+
       if (savedSessionData) {
         const parsedSession = JSON.parse(savedSessionData);
         setAttempts(parsedSession.attempts || 0);
@@ -65,11 +68,18 @@ export default function Home() {
           setIsLockedToday(true);
           setGameMessage(`🎯 Complete! Match found in ${parsedSession.attempts} Photos!`);
           setMessageColor("text-emerald-400 font-bold");
+        } else if ((parsedSession.attempts || 0) >= loadedMax) {
+          setPlayerHex(parsedSession.playerHex || null);
+          setSavedPhoto(parsedSession.photoDataUrl || "");
+          setFinalScore(parsedSession.score || 0);
+          setIsLockedToday(true);
+          setGameMessage(`❌ Game Over! Out of attempts (${parsedSession.attempts}/${loadedMax})!`);
+          setMessageColor("text-rose-500 font-bold");
         } else {
           setPlayerHex(null);
           setSavedPhoto("");
           setIsLockedToday(false);
-          setGameMessage(`Keep hunting! Photos taken: ${parsedSession.attempts}`);
+          setGameMessage(`Keep hunting! Photos taken: ${parsedSession.attempts}/${loadedMax}`);
           setMessageColor("text-amber-400 font-medium");
         }
       } else {
@@ -146,12 +156,16 @@ export default function Home() {
       for (let i = 0; i < historyBlocks.length; i += 5) {
         chunkedGrid += historyBlocks.slice(i, i + 5).join(" ") + "\n";
       }
-      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${attempts} Shots [Mode: ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${finalScore}% [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
+      const scoreOutputLabel = finalScore >= 80 ? `${finalScore}%` : "Failed (Max Shots Reached)";
+      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${attempts}/${maxAttemptsAllowed} Shots [Mode: ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${finalScore}% [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
       setPreviewText(text);
     }
-  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak, playerHex, difficulty]);
+  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak, playerHex, difficulty, maxAttemptsAllowed]);
 
   const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
+
+    if (attempts >= maxAttemptsAllowed || isLockedToday) return;
+
     const newAttemptCount = attempts + 1;
     setAttempts(newAttemptCount);
     setPlayerHex(detectedColour);
@@ -164,7 +178,9 @@ export default function Home() {
     setHistoryBlocks(updatedBlocks);
 
     const isVictoryMatch = score >= 80;
-    const storageKey = getDailyStorageKey(difficulty);
+
+    const isOutOfAttempts = newAttemptCount >= maxAttemptsAllowed;
+    const shouldLockGame = isVictoryMatch || isOutOfAttempts;
 
     let runningStreak = streak;
     if (isVictoryMatch && !isLockedToday) {
@@ -190,12 +206,20 @@ export default function Home() {
           lastWinTimestamp: new Date().toISOString()
         }));
       }
+    } else if (isOutOfAttempts && !isVictoryMatch) {
+      runningStreak = 0;
+      setStreak(0);
+      localStorage.setItem(STATIC_STREAK_KEY, JSON.stringify({
+        streakCount: 0,
+        lastWinTimestamp: ""
+      }));
     }
 
+    const storageKey = getDailyStorageKey(difficulty);
     localStorage.setItem(storageKey, JSON.stringify({
-      score,
+      score: isVictoryMatch ? score : 0,
       playerHex: detectedColour,
-      photoDataUrl: isVictoryMatch ? photoDataUrl : "",
+      photoDataUrl,
       attempts: newAttemptCount,
       isVictory: isVictoryMatch,
       historyBlocks: updatedBlocks,
@@ -205,12 +229,16 @@ export default function Home() {
       completedAt: new Date().toISOString()
     }));
 
+    setSavedPhoto(photoDataUrl);
+    setFinalScore(isVictoryMatch ? score : 0);
+    setIsLockedToday(shouldLockGame);
+
     if (isVictoryMatch) {
-      setSavedPhoto(photoDataUrl);
-      setFinalScore(score);
-      setIsLockedToday(true);
       setGameMessage(`🎯 Perfect Match! ${score}% Similarity!`);
       setMessageColor("text-emerald-400 font-extrabold");
+    } else if (isOutOfAttempts) {
+      setGameMessage(`❌ Game Over! Out of attempts (${newAttemptCount}/${maxAttemptsAllowed})!`);
+      setMessageColor("text-rose-500 font-bold");
     } else {
       setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
       setMessageColor("text-rose-400 font-semibold");
@@ -219,9 +247,10 @@ export default function Home() {
 
   const handleReset = () => {
     setPlayerHex(null);
-    setGameMessage(`Aim and take your Photo! (Photos taken: ${attempts})`);
+    setGameMessage(`Aim and take your Photo! (Photos taken: ${attempts}/${maxAttemptsAllowed})`);
     setMessageColor("text-slate-400 font-normal");
   };
+
 
   const handleCopyClipboard = async () => {
     try {
@@ -365,13 +394,13 @@ export default function Home() {
             />
 
             {attempts > 0 && (
-            <button
-              onClick={handleRestartDayAction}
-              className="mt-6 text-[11px] font-black tracking-widest text-rose-500/70 hover:text-rose-400 hover:underline transition-all cursor-pointer select-none"
-            >
-              ⚠️ Restart Today ({difficulty.toUpperCase()})
-            </button>
-          )}
+              <button
+                onClick={handleRestartDayAction}
+                className="mt-6 text-[11px] font-black tracking-widest text-rose-500/70 hover:text-rose-400 hover:underline transition-all cursor-pointer select-none"
+              >
+                ⚠️ Restart Today ({difficulty.toUpperCase()})
+              </button>
+            )}
           </>
         )
       }
