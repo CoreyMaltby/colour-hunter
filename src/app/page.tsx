@@ -32,6 +32,10 @@ export default function Home() {
 
   const STATIC_STREAK_KEY = "colour-hunter-global-streak-v1";
 
+  const getFormattedDate = () => {
+    return new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  };
+
   useEffect(() => {
     async function loadDailyChallenge() {
       try {
@@ -102,11 +106,19 @@ export default function Home() {
 
   useEffect(() => {
     if (isLockedToday && activeTarget && historyBlocks.length > 0) {
-      const blockGrid = historyBlocks.join("\n");
-      const text = `Colour Hunter\nPhotos Taken: ${attempts}\nFinal Accuracy: ${finalScore}%\n🔥 Current Streak: ${streak} days\nTarget: ${activeTarget.name}\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
+      const currentDateString = getFormattedDate();
+
+      // Groups sqaures into 5
+      let chunkedGrid = "";
+      for (let i = 0; i < historyBlocks.length; i += 5) {
+        const lineChunk = historyBlocks.slice(i, i + 5).join(" ");
+        chunkedGrid += lineChunk + "\n";
+      }
+      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${attempts} Shots\n🏆 Final Accuracy: ${finalScore}% [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
+
       setPreviewText(text);
     }
-  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak]);
+  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak, playerHex]);
 
   const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
     // Increment photo submission counter
@@ -114,10 +126,9 @@ export default function Home() {
     setAttempts(newAttemptCount);
     setPlayerHex(detectedColour);
 
-
-    let currentShotBlock = `🟥 ${newAttemptCount}: ${score}%`;
-    if (score >= 80) currentShotBlock = `🟩 ${newAttemptCount}: ${score}%`;
-    else if (score >= 60) currentShotBlock = `🟨 ${newAttemptCount}: ${score}%`;
+    let currentShotBlock = `🟥${score}%`;
+    if (score >= 80) currentShotBlock = `🟩${score}%`;
+    else if (score >= 60) currentShotBlock = `🟨${score}%`;
 
     const updatedBlocks = [...historyBlocks, currentShotBlock];
     setHistoryBlocks(updatedBlocks);
