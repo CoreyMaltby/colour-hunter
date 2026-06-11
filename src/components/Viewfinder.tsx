@@ -9,6 +9,7 @@ interface ViewfinderProps {
   onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
   isLockedToday: boolean;
   savedPhoto: string;
+  difficulty: "normal" | "hard";
 }
 
 export default function Viewfinder({
@@ -16,6 +17,7 @@ export default function Viewfinder({
   onPhotoCaptured,
   isLockedToday,
   savedPhoto,
+  difficulty,
 }: ViewfinderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -150,7 +152,8 @@ export default function Viewfinder({
 
     const matchScore = calculateMatchScore(
       activeTarget.r, activeTarget.g, activeTarget.b,
-      detectedR, detectedG, detectedB
+      detectedR, detectedG, detectedB,
+      difficulty
     );
 
     setLocalPhotoUrl(dataURL);
