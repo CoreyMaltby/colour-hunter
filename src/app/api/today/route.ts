@@ -1,31 +1,25 @@
 import { NextResponse } from "next/server";
-import dailyColours from "../../../data/daily_colours.json";
-import { DailyColour } from "../../../types";
+import dailyColoursData from "../../../data/daily_colours.json";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
-        const epoch = new Date("2026-01-01T00:00:00Z");
-        const today = new Date();
+        const { searchParams } = new URL(request.url);
+        const requestedMode = searchParams.get("mode") === "hard" ? "hard" : "normal";
 
-        const diffInTime = today.getTime() - epoch.getTime();
-        const currentDay = Math.floor(diffInTime / (1000 * 3600 * 24));
+        // Get correct array of colours
+        const colourPool = dailyColoursData[requestedMode] || dailyColoursData.normal;
 
-        const colourIndex = Math.abs(currentDay) % dailyColours.length;
-        const targetChallange: DailyColour = dailyColours[colourIndex];
-
-        return NextResponse.json(targetChallange, {
-            status: 200,
-            headers: {
-                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            }
-        });
-    } catch (error) {
-        console.error("Data api router encountered an error:", error)
-        return NextResponse.json(
-            { error: "Internal Server Processing Exception" },
-            { status: 500 }
+        const now = new Date();
+        const dayOfYear = Math.floor(
+            (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
         );
+
+        const selectedIndex = dayOfYear % colourPool.length;
+        const todaysColour = colourPool[selectedIndex];
+
+        return NextResponse.json(todaysColour);
+    } catch (error) {
+        console.error("API Retrieval error:", error);
+        return NextResponse.json({ error: "Failed to load daily spectrum color metrics." }, { status: 500 });
     }
 }
