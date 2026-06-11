@@ -114,6 +114,29 @@ export default function Home() {
     fetchChallengeColor(selectedMode);
   };
 
+  const handleRestartDayAction = () => {
+    const doubleCheckConfirmation = window.confirm(
+      `Are you sure you want to restart today's challenge in ${difficulty.toUpperCase()} mode? This clears all photos taken so far!`
+    );
+    if (!doubleCheckConfirmation) return;
+
+    const currentActiveStorageKey = getDailyStorageKey(difficulty);
+    localStorage.removeItem(currentActiveStorageKey);
+
+    setPlayerHex(null);
+    setSavedPhoto("");
+    setAttempts(0);
+    setFinalScore(0);
+    setIsLockedToday(false);
+    setHistoryBlocks([]);
+    setPreviewText("");
+    setGameMessage("Aim and take your Photo!");
+    setMessageColor("text-slate-400");
+
+    // 3. Re-trigger color synchronization
+    fetchChallengeColor(difficulty);
+  };
+
   useEffect(() => {
     if (isLockedToday && activeTarget && historyBlocks.length > 0) {
       const currentDateString = getFormattedDate();
@@ -340,6 +363,15 @@ export default function Home() {
               savedPhoto={savedPhoto}
               onReset={handleReset}
             />
+
+            {attempts > 0 && (
+            <button
+              onClick={handleRestartDayAction}
+              className="mt-6 text-[11px] font-black tracking-widest text-rose-500/70 hover:text-rose-400 hover:underline transition-all cursor-pointer select-none"
+            >
+              ⚠️ Restart Today ({difficulty.toUpperCase()})
+            </button>
+          )}
           </>
         )
       }
