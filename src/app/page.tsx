@@ -19,6 +19,7 @@ export default function Home() {
   const [attempts, setAttempts] = useState<number>(0);
   const [finalScore, setFinalScore] = useState<number>(0);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
+  const [imageCopied, setImageCopied] = useState<boolean>(false);
 
   // Game state analytics
   const [historyBlocks, setHistoryBlocks] = useState<string[]>([]);
@@ -31,6 +32,10 @@ export default function Home() {
   };
 
   const STATIC_STREAK_KEY = "colour-hunter-global-streak-v1";
+
+  const getFormattedDate = () => {
+    return new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  };
 
   useEffect(() => {
     async function loadDailyChallenge() {
@@ -102,11 +107,19 @@ export default function Home() {
 
   useEffect(() => {
     if (isLockedToday && activeTarget && historyBlocks.length > 0) {
-      const blockGrid = historyBlocks.join("\n");
-      const text = `Colour Hunter\nPhotos Taken: ${attempts}\nFinal Accuracy: ${finalScore}%\n🔥 Current Streak: ${streak} days\nTarget: ${activeTarget.name}\n\n${blockGrid}\n\nPlay at: ${window.location.origin}`;
+      const currentDateString = getFormattedDate();
+
+      // Groups sqaures into 5
+      let chunkedGrid = "";
+      for (let i = 0; i < historyBlocks.length; i += 5) {
+        const lineChunk = historyBlocks.slice(i, i + 5).join(" ");
+        chunkedGrid += lineChunk + "\n";
+      }
+      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${attempts} Shots\n🏆 Final Accuracy: ${finalScore}% [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
+
       setPreviewText(text);
     }
-  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak]);
+  }, [isLockedToday, activeTarget, historyBlocks, attempts, finalScore, streak, playerHex]);
 
   const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
     // Increment photo submission counter
@@ -114,10 +127,9 @@ export default function Home() {
     setAttempts(newAttemptCount);
     setPlayerHex(detectedColour);
 
-
-    let currentShotBlock = `🟥 ${newAttemptCount}: ${score}%`;
-    if (score >= 80) currentShotBlock = `🟩 ${newAttemptCount}: ${score}%`;
-    else if (score >= 60) currentShotBlock = `🟨 ${newAttemptCount}: ${score}%`;
+    let currentShotBlock = `🟥${score}%`;
+    if (score >= 80) currentShotBlock = `🟩${score}%`;
+    else if (score >= 60) currentShotBlock = `🟨${score}%`;
 
     const updatedBlocks = [...historyBlocks, currentShotBlock];
     setHistoryBlocks(updatedBlocks);
@@ -196,6 +208,27 @@ export default function Home() {
     }
   };
 
+  const handleCopyImageToClipboard = async () => {
+    if (!savedPhoto) return;
+
+    try {
+      const base64Response = await fetch(savedPhoto);
+      const imageBlob = await base64Response.blob();
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [imageBlob.type]: imageBlob
+        })
+      ]);
+
+      setImageCopied(true);
+      setTimeout(() => setImageCopied(false), 3000);
+    } catch (error) {
+      console.error("Image clipboard copying falied:", error);
+      alert("Your browser or device does not support copying image to clipboard. You can long-press the image to save manually!");
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-50 p-4 antialiased">
       {/* Header */}
@@ -226,15 +259,28 @@ export default function Home() {
       {isLockedToday && (
         <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in z-20">
           <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-3">Share Your Results</h3>
-          <button
-            onClick={handleCopyClipboard}
-            className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-4 flex items-center justify-center gap-2 ${shareCopied
-              ? "bg-emerald-600 text-white"
-              : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
-              }`}
-          >
-            {shareCopied ? "✓ Copied!" : "📋 Copy Text"}
-          </button>
+
+          <div className="grid grid-cols-2 gap-3 w-full mb-4">
+            <button
+              onClick={handleCopyClipboard}
+              className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${shareCopied
+                  ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                  : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                }`}
+            >
+              {shareCopied ? "✓ Text Copied!" : "📋 Copy Score Text"}
+            </button>
+
+            <button
+              onClick={handleCopyImageToClipboard}
+              className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${imageCopied
+                  ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                  : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                }`}
+            >
+              {imageCopied ? "✓ Photo Copied!" : "📸 Copy Victory Photo"}
+            </button>
+          </div>
 
           <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
             <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1">Clipboard Preview</p>
