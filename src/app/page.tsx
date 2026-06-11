@@ -19,6 +19,7 @@ export default function Home() {
   const [attempts, setAttempts] = useState<number>(0);
   const [finalScore, setFinalScore] = useState<number>(0);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
+  const [imageCopied, setImageCopied] = useState<boolean>(false);
 
   // Game state analytics
   const [historyBlocks, setHistoryBlocks] = useState<string[]>([]);
@@ -207,6 +208,27 @@ export default function Home() {
     }
   };
 
+  const handleCopyImageToClipboard = async () => {
+    if (!savedPhoto) return;
+
+    try {
+      const base64Response = await fetch(savedPhoto);
+      const imageBlod = await base64Response.blob();
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [imageBlod.type]: imageBlod
+        })
+      ]);
+
+      setImageCopied(true);
+      setTimeout(() => setImageCopied(false), 3000);
+    } catch (errror) {
+      console.error("Image clipboard copying falied:", errror);
+      alert("Your browser or device does not support copying image to clipboard. You can long-press the image to save manually!");
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-50 p-4 antialiased">
       {/* Header */}
@@ -237,15 +259,28 @@ export default function Home() {
       {isLockedToday && (
         <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center animate-fade-in z-20">
           <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-3">Share Your Results</h3>
-          <button
-            onClick={handleCopyClipboard}
-            className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 shadow-lg tracking-wider mb-4 flex items-center justify-center gap-2 ${shareCopied
-              ? "bg-emerald-600 text-white"
-              : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
-              }`}
-          >
-            {shareCopied ? "✓ Copied!" : "📋 Copy Text"}
-          </button>
+
+          <div className="grid grid-cols-2 gap-3 w-full mb-4">
+            <button
+              onClick={handleCopyClipboard}
+              className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${shareCopied
+                  ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                  : "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                }`}
+            >
+              {shareCopied ? "✓ Text Copied!" : "📋 Copy Score Text"}
+            </button>
+
+            <button
+              onClick={handleCopyImageToClipboard}
+              className={`py-3 px-2 text-xs font-black rounded-xl transition-all duration-300 shadow-md tracking-wider flex items-center justify-center gap-1.5 ${imageCopied
+                  ? "bg-emerald-600 text-white shadow-emerald-900/30"
+                  : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transform hover:-translate-y-0.5 active:translate-y-0"
+                }`}
+            >
+              {imageCopied ? "✓ Photo Copied!" : "📸 Copy Victory Photo"}
+            </button>
+          </div>
 
           <div className="w-full text-left bg-slate-950 p-4 rounded-xl shadow-inner">
             <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1">Clipboard Preview</p>
