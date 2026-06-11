@@ -21,10 +21,13 @@ export default function Viewfinder({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [videoTrack, setVideoTrack] = useState<MediaStreamTrack | null>(null);
   const [hasCameraError, setHasCameraError] = useState<boolean>(false);
   const [isShowingPhoto, setIsShowingPhoto] = useState<boolean>(false);
   const [localPhotoUrl, setLocalPhotoUrl] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [flashOn, setFlashOn] = useState<boolean>(false);
+  const [supportsTorch, setSupportsTorch] = useState<boolean>(false);
 
   useEffect(() => {
     if (isLockedToday) {
@@ -54,6 +57,24 @@ export default function Viewfinder({
         });
 
         setStream(hardwareStream);
+        const track = hardwareStream.getVideoTracks()[0];
+        setVideoTrack(track || null);
+
+        const capabilities = track?.getCapabilities?.();
+        const supportsTorchCapability = Boolean(capabilities && "torch" in capabilities);
+        setSupportsTorch(supportsTorchCapability);
+        if (!supportsTorchCapability) {
+          setFlashOn(false);
+        }
+
+        if (flashOn && supportsTorchCapability && track) {
+          try {
+            await (track as any).applyConstraints({ advanced: [{ torch: true }] });
+          } catch (flashError) {
+            console.warn("Flash/torch enable failed:", flashError);
+          }
+        }
+
         if (videoRef.current) {
           videoRef.current.srcObject = hardwareStream;
         }
@@ -70,6 +91,21 @@ export default function Viewfinder({
       }
     };
   }, [isLockedToday, savedPhoto, facingMode]);
+
+  useEffect(() => {
+    if (!videoTrack || !supportsTorch) return;
+
+    async function updateTorch() {
+      try {
+        if (!videoTrack || !videoTrack.applyConstraints) return;
+        await (videoTrack as any).applyConstraints({ advanced: [{ torch: flashOn }] });
+      } catch (err) {
+        console.warn("Unable to set flash state:", err);
+      }
+    }
+
+    updateTorch();
+  }, [flashOn, videoTrack, supportsTorch]);
 
   const handleToggleLensFacing = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
@@ -180,6 +216,17 @@ export default function Viewfinder({
             className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
           >
             📷 Take Photo
+          </button>
+        )}
+
+        {!isLockedToday && !hasCameraError && (
+          <button
+            onClick={() => setFlashOn((prev) => !prev)}
+            type="button"
+            disabled={!supportsTorch}
+            className={`w-full py-2.5 ${supportsTorch ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-200" : "bg-slate-800 text-slate-500 cursor-not-allowed"} border border-slate-800 rounded-xl text-xs font-bold transition-all tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95`}
+          >
+            {flashOn ? "⚡ Flash On" : "⚡ Flash Off"}
           </button>
         )}
 
