@@ -584,13 +584,31 @@ export default function Home() {
         </>
       )}
 
-      <footer className="w-full max-w-[400px] mt-12 mb-4 pt-6 border-t border-slate-800/50 flex flex-col items-center justify-center text-center">
-        <p className="text-[10px] text-slate-500 font-medium tracking-wide">
-          &copy; {new Date().getFullYear()} Colour Hunter.
-        </p>
-        <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-1.5 leading-relaxed max-w-[280px]">
-          Idea inspired by <a href="https://www.youtube.com/watch?v=hwt6P425Fjc" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors underline underline-offset-2">Atomic Shrimp</a>. Thank you for sharing your ideas!
-        </p>
+      <footer className="w-full max-w-[400px] mt-12 mb-4 pt-6 border-t border-slate-800/50 flex flex-col items-center justify-center text-center gap-4">
+
+        {/* Copyright & Credits */}
+        <div>
+          <p className="text-[10px] text-slate-500 font-medium tracking-wide">
+            &copy; {new Date().getFullYear()} Colour Hunter.
+          </p>
+          <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-1.5 leading-relaxed max-w-[280px]">
+            Idea inspired by <a href="https://www.youtube.com/watch?v=hwt6P425Fjc" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors underline underline-offset-2">Atomic Shrimp</a>. Thank you for putting it out into the wild!
+          </p>
+          <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-1.5 leading-relaxed max-w-[280px]">
+            Colour database provided by <a href="https://www.kaggle.com/datasets/avi1023/color-names" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors underline underline-offset-2">Avi on Kaggle</a>.
+          </p>
+        </div>
+
+        {/* Feedback Button */}
+        <a
+          href="https://forms.gle/1rHSjS54bifUkCDW9"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-5 py-2.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-[10px] font-black tracking-widest uppercase rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+        >
+          💬 Give Feedback
+        </a>
+
       </footer>
     </main>
   );
