@@ -9,6 +9,7 @@ interface ViewfinderProps {
   onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
   isLockedToday: boolean;
   savedPhoto: string;
+  onReset: () => void;
   difficulty: "normal" | "hard";
 }
 
@@ -17,7 +18,8 @@ export default function Viewfinder({
   onPhotoCaptured,
   isLockedToday,
   savedPhoto,
-  difficulty,
+  onReset,
+  difficulty
 }: ViewfinderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,6 +32,9 @@ export default function Viewfinder({
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [flashOn, setFlashOn] = useState<boolean>(false);
   const [supportsTorch, setSupportsTorch] = useState<boolean>(false);
+
+  // A simple state toggle used to kickstart the camera lifecycle on auto-reset
+  const [refreshToggle, setRefreshToggle] = useState<boolean>(false);
 
   useEffect(() => {
     if (isLockedToday) {
@@ -53,10 +58,20 @@ export default function Viewfinder({
           height: { ideal: 720 },
         };
 
-        const hardwareStream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: false,
-        });
+        let hardwareStream: MediaStream;
+
+        try {
+          hardwareStream = await navigator.mediaDevices.getUserMedia({
+            video: videoConstraints,
+            audio: false,
+          });
+        } catch (deviceErr) {
+          console.warn("Specific lens constraint failed, falling back to default:", deviceErr);
+          hardwareStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
 
         setStream(hardwareStream);
         const track = hardwareStream.getVideoTracks()[0];
@@ -79,9 +94,15 @@ export default function Viewfinder({
 
         if (videoRef.current) {
           videoRef.current.srcObject = hardwareStream;
+          // Force execution to re-play video stream data layers smoothly
+          try {
+            await videoRef.current.play();
+          } catch (pErr) {
+            console.warn("Playback stream attach recovery note:", pErr);
+          }
         }
       } catch (err) {
-        console.error("Camera interface initialization fault:", err);
+        console.error("Camera interface initialization completely failed:", err);
         setHasCameraError(true);
       }
     }
@@ -92,7 +113,18 @@ export default function Viewfinder({
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [isLockedToday, savedPhoto, facingMode]);
+  }, [isLockedToday, savedPhoto, facingMode, refreshToggle]);
+
+  useEffect(() => {
+    if (isShowingPhoto && !isLockedToday) {
+      const timer = setTimeout(() => {
+        setIsShowingPhoto(false);
+        setLocalPhotoUrl("");
+        setRefreshToggle(prev => !prev);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isShowingPhoto, isLockedToday]);
 
   useEffect(() => {
     if (!videoTrack || !supportsTorch) return;
@@ -157,13 +189,13 @@ export default function Viewfinder({
     );
 
     setLocalPhotoUrl(dataURL);
+    setIsShowingPhoto(true);
     onPhotoCaptured(matchScore, playerHexOutputStr, dataURL);
   };
 
   return (
     <div className="w-full max-w-[400px] flex flex-col items-center">
       <div className="w-full aspect-[3/4] bg-black rounded-xl overflow-hidden mb-5 border-4 border-white shadow-lg relative">
-        
         {!isShowingPhoto && !hasCameraError && (
           <video
             ref={videoRef}
@@ -175,7 +207,7 @@ export default function Viewfinder({
           />
         )}
 
-        {isShowingPhoto && (
+        {isShowingPhoto && localPhotoUrl && (
           <img
             src={localPhotoUrl}
             alt="Captured hunt snapshot results frame"
@@ -184,12 +216,7 @@ export default function Viewfinder({
         )}
 
         {!isShowingPhoto && !hasCameraError && (
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className="absolute inset-0 w-full h-full z-10 pointer-events-none"
-            aria-hidden="true"
-          >
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full z-10 pointer-events-none" aria-hidden="true">
             <defs>
               <mask id="reticle-hole">
                 <rect x="0" y="0" width="100" height="100" fill="white" />
@@ -216,31 +243,34 @@ export default function Viewfinder({
         {!isLockedToday && !hasCameraError && (
           <button
             onClick={handleCapturePhotoAction}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all tracking-wide text-base active:scale-95"
+            className="w-full py-[16px] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-black rounded-2xl shadow-xl tracking-widest text-base transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
           >
-            📷 Take Photo
+            📸 Take Photo
           </button>
         )}
 
         {!isLockedToday && !hasCameraError && (
-          <button
-            onClick={() => setFlashOn((prev) => !prev)}
-            type="button"
-            disabled={!supportsTorch}
-            className={`w-full py-2.5 ${supportsTorch ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-200" : "bg-slate-800 text-slate-500 cursor-not-allowed"} border border-slate-800 rounded-xl text-xs font-bold transition-all tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95`}
-          >
-            {flashOn ? "⚡ Flash On" : "⚡ Flash Off"}
-          </button>
-        )}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setFlashOn((prev) => !prev)}
+              type="button"
+              disabled={!supportsTorch}
+              className={`py-[16px] rounded-xl text-sm font-bold border border-slate-800 transition-all tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${supportsTorch
+                ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 cursor-pointer"
+                : "bg-slate-900/40 text-slate-600 border-slate-900 cursor-not-allowed opacity-50"
+                }`}
+            >
+              {flashOn ? "⚡ Flash On" : "⚡ Flash Off"}
+            </button>
 
-        {!isShowingPhoto && !hasCameraError && (
-          <button
-            onClick={handleToggleLensFacing}
-            type="button"
-            className="w-full py-2.5 bg-white/10 hover:bg-white/10 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm select-none active:scale-95"
-          >
-            {facingMode === "environment" ? "🔄 Switch to Front Camera" : "🔄 Switch to Back Camera"}
-          </button>
+            <button
+              onClick={handleToggleLensFacing}
+              type="button"
+              className="py-[16px] bg-white/5 hover:bg-white/10 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-sm font-bold transition-all tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 select-none"
+            >
+              {facingMode === "environment" ? "🔄 Front Camera" : "🔄 Back Camera"}
+            </button>
+          </div>
         )}
       </div>
 
