@@ -11,6 +11,7 @@ interface ViewfinderProps {
   savedPhoto: string;
   onReset: () => void;
   difficulty: "normal" | "hard";
+  gameMode: "daily" | "seeker";
 }
 
 export default function Viewfinder({
@@ -19,7 +20,8 @@ export default function Viewfinder({
   isLockedToday,
   savedPhoto,
   onReset,
-  difficulty
+  difficulty,
+  gameMode // <-- NEW PROP
 }: ViewfinderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,7 +35,6 @@ export default function Viewfinder({
   const [flashOn, setFlashOn] = useState<boolean>(false);
   const [supportsTorch, setSupportsTorch] = useState<boolean>(false);
 
-  // A simple state toggle used to kickstart the camera lifecycle on auto-reset
   const [refreshToggle, setRefreshToggle] = useState<boolean>(false);
 
   useEffect(() => {
@@ -87,22 +88,16 @@ export default function Viewfinder({
         if (flashOn && supportsTorchCapability && track) {
           try {
             await (track as any).applyConstraints({ advanced: [{ torch: true }] });
-          } catch (flashError) {
-            console.warn("Flash/torch enable failed:", flashError);
-          }
+          } catch (flashError) {}
         }
 
         if (videoRef.current) {
           videoRef.current.srcObject = hardwareStream;
-          // Force execution to re-play video stream data layers smoothly
           try {
             await videoRef.current.play();
-          } catch (pErr) {
-            console.warn("Playback stream attach recovery note:", pErr);
-          }
+          } catch (pErr) {}
         }
       } catch (err) {
-        console.error("Camera interface initialization completely failed:", err);
         setHasCameraError(true);
       }
     }
@@ -128,16 +123,12 @@ export default function Viewfinder({
 
   useEffect(() => {
     if (!videoTrack || !supportsTorch) return;
-
     async function updateTorch() {
       try {
         if (!videoTrack || !videoTrack.applyConstraints) return;
         await (videoTrack as any).applyConstraints({ advanced: [{ torch: flashOn }] });
-      } catch (err) {
-        console.warn("Unable to set flash state:", err);
-      }
+      } catch (err) {}
     }
-
     updateTorch();
   }, [flashOn, videoTrack, supportsTorch]);
 
@@ -182,12 +173,13 @@ export default function Viewfinder({
     };
     const playerHexOutputStr = convertToHex(detectedR, detectedG, detectedB);
 
+    // PASSED GAME MODE DOWN TO THE MATH FUNCTION!
     const matchScore = calculateMatchScore(
       activeTarget.r, activeTarget.g, activeTarget.b,
       detectedR, detectedG, detectedB,
-      difficulty
+      difficulty,
+      gameMode 
     );
-
 
     setLocalPhotoUrl(dataURL);
     setIsShowingPhoto(true);

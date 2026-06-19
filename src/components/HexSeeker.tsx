@@ -182,7 +182,7 @@ export default function HexSeekerMode() {
                     </div>
 
                     <div className="mb-4 px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-black shadow-inner tracking-widest flex items-center gap-2 rounded-lg">
-                        Shots Fired: <span className="text-blue-400 text-sm">{attempts}</span>
+                        Photos Taken: <span className="text-blue-400 text-sm">{attempts}</span>
                     </div>
 
                     <div className={`text-center text-sm md:text-base mb-6 min-h-[48px] max-w-[340px] tracking-wide ${hintColor}`}>
@@ -196,6 +196,7 @@ export default function HexSeekerMode() {
                         savedPhoto={savedPhoto}
                         difficulty={difficulty}
                         onReset={() => { }}
+                        gameMode="seeker"
                     />
 
                     {isVictory && (
