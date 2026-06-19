@@ -43,6 +43,7 @@ export default function Home() {
   const [seekerTarget, setSeekerTarget] = useState<DailyColour | null>(null);
   const [seekerPlayerHex, setSeekerPlayerHex] = useState<string | null>(null);
   const [seekerAttempts, setSeekerAttempts] = useState<number>(0);
+  const [seekerHistory, setSeekerHistory] = useState<string[]>([]);
   const [isSeekerVictory, setIsSeekerVictory] = useState<boolean>(false);
   const [seekerHint, setSeekerHint] = useState<string>("Waiting for first photo...");
   const [seekerSavedPhoto, setSeekerSavedPhoto] = useState<string>("");
@@ -206,6 +207,7 @@ export default function Home() {
       const randomColor = colourDatabase[Math.floor(Math.random() * colourDatabase.length)];
       setSeekerTarget(randomColor);
       setSeekerAttempts(0);
+      setSeekerHistory([]);
       setIsSeekerVictory(false);
       setSeekerPlayerHex(null);
       setSeekerSavedPhoto("");
@@ -224,6 +226,7 @@ export default function Home() {
     const randomColor = colourDatabase[Math.floor(Math.random() * colourDatabase.length)];
     setSeekerTarget(randomColor);
     setSeekerAttempts(0);
+    setSeekerHistory([]);
     setIsSeekerVictory(false);
     setSeekerPlayerHex(null);
     setSeekerSavedPhoto("");
@@ -259,6 +262,12 @@ export default function Home() {
     if (gameMode === "seeker") {
       if (isSeekerVictory || !seekerTarget) return;
       const newAttempts = seekerAttempts + 1;
+
+      let currentShotBlock = `🟥${score}%`;
+      if (score >= 80) currentShotBlock = `🟩${score}%`;
+      else if (score >= 60) currentShotBlock = `🟨${score}%`;
+
+      setSeekerHistory([...seekerHistory, currentShotBlock]);
       setSeekerAttempts(newAttempts);
       setSeekerPlayerHex(detectedColour);
       setSeekerSavedPhoto(photoDataUrl);
@@ -317,7 +326,7 @@ export default function Home() {
       setGameMessage(`❌ Game Over! Out of attempts (${newCount}/${maxAttemptsAllowed})!`);
       setMessageColor("text-rose-500 font-bold");
     } else {
-      setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
+      setGameMessage(`❌ Only a ${score}% Match — Try Again! (${newCount}/${maxAttemptsAllowed})`);
       setMessageColor("text-rose-400 font-semibold");
     }
   };
@@ -356,7 +365,11 @@ export default function Home() {
   };
 
   const handleReset = () => {
-    setDailyPlayerHex(null);
+    if (!isLockedToday) {
+      setDailyPlayerHex(null);
+      setGameMessage(`Aim and take your Photo! (Photos taken: ${currentAttempts}/${maxAttemptsAllowed})`);
+      setMessageColor("text-slate-400 font-normal");
+    }
   };
 
   // Dynamic share code generator
@@ -374,11 +387,16 @@ export default function Home() {
   }, [isLockedToday, activeTarget, currentHistory, currentAttempts, finalScore, streak, dailyPlayerHex, difficulty, maxAttemptsAllowed, gameMode]);
 
   useEffect(() => {
-    if (isSeekerVictory && seekerTarget) {
-      const text = `🔎 Colour Hunter • Hex Seeker\n🎯 Target: ${seekerTarget.name} (${seekerTarget.hex.toUpperCase()})\n📸 Shots Taken: ${seekerAttempts} [Mode: ${difficulty.toUpperCase()}]\n🏆 Final Match: ${seekerPlayerHex ? seekerPlayerHex.toUpperCase() : ""}\n\nhttps://colour-hunter.vercel.app/`;
+    if (isSeekerVictory && seekerTarget && seekerHistory.length > 0) {
+      let chunkedGrid = "";
+      for (let i = 0; i < seekerHistory.length; i += 5) {
+        chunkedGrid += seekerHistory.slice(i, i + 5).join(" ") + "\n";
+      }
+
+      const text = `🔎 Colour Hunter • Hex Seeker\n🎯 Target: ${seekerTarget.name} (${seekerTarget.hex.toUpperCase()})\n📸 Shots Taken: ${seekerAttempts} [Mode: ${difficulty.toUpperCase()}]\n🏆 Final Match: ${seekerPlayerHex ? seekerPlayerHex.toUpperCase() : ""}\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
       setSeekerPreviewText(text);
     }
-  }, [isSeekerVictory, seekerTarget, seekerAttempts, seekerPlayerHex, difficulty]);
+  }, [isSeekerVictory, seekerTarget, seekerAttempts, seekerPlayerHex, difficulty, seekerHistory]);
 
   const handleCopyClipboard = async () => {
     try {
