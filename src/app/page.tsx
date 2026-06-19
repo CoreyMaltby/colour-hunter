@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Viewfinder from "../components/Viewfinder";
 import Scoreboard from "../components/Scoreboard";
 import { DailyColour } from "../types";
+import { generateSeekerHint } from "../lib/colourMath";
 
 interface GameStats {
   daysComplete: number;
@@ -18,15 +18,17 @@ interface GameStats {
 export default function Home() {
   const router = useRouter();
 
+  // GLobal State
   const [gameMode, setGameMode] = useState<"daily" | "seeker">("daily");
   const [difficulty, setDifficulty] = useState<"normal" | "hard">("normal");
-
-  const [activeTarget, setActiveTarget] = useState<DailyColour | null>(null);
-  const [playerHex, setPlayerHex] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [gameMessage, setGameMessage] = useState<string>("Aim and take your Photo!");
   const [messageColor, setMessageColor] = useState<string>("text-slate-400");
+  const [finalScore, setFinalScore] = useState<number>(0);
 
+  // Daily Mode State
+  const [activeTarget, setActiveTarget] = useState<DailyColour | null>(null);
+  const [dailyPlayerHex, setDailyPlayerHex] = useState<string | null>(null); 
   const [normalAttempts, setNormalAttempts] = useState<number>(0);
   const [hardAttempts, setHardAttempts] = useState<number>(0);
   const [normalHistory, setNormalHistory] = useState<string[]>([]);
@@ -36,25 +38,30 @@ export default function Home() {
   const [normalSavedPhoto, setNormalSavedPhoto] = useState<string>("");
   const [hardSavedPhoto, setHardSavedPhoto] = useState<string>("");
 
-  const [globalStats, setGlobalStats] = useState<GameStats>({
-    daysComplete: 0,
-    easyWins: 0,
-    hardWins: 0,
-    totalAttempts: 0,
-    successRate: 0,
-  });
+  // Hex Seaker State
+  const [colourDatabase, setColourDatabase] = useState<DailyColour[]>([]);
+  const [seekerTarget, setSeekerTarget] = useState<DailyColour | null>(null);
+  const [seekerPlayerHex, setSeekerPlayerHex] = useState<string | null>(null); 
+  const [seekerAttempts, setSeekerAttempts] = useState<number>(0);
+  const [isSeekerVictory, setIsSeekerVictory] = useState<boolean>(false);
+  const [seekerHint, setSeekerHint] = useState<string>("Waiting for first scan...");
+  const [seekerSavedPhoto, setSeekerSavedPhoto] = useState<string>("");
 
+  // Stats and Sharing
+  const [globalStats, setGlobalStats] = useState<GameStats>({
+    daysComplete: 0, easyWins: 0, hardWins: 0, totalAttempts: 0, successRate: 0,
+  });
   const [streak, setStreak] = useState<number>(0);
   const [previewText, setPreviewText] = useState<string>("");
   const [shareCopied, setShareCopied] = useState<boolean>(false);
   const [imageCopied, setImageCopied] = useState<boolean>(false);
-  const [finalScore, setFinalScore] = useState<number>(0);
 
   const maxAttemptsAllowed = difficulty === "hard" ? 15 : 20;
   const currentAttempts = difficulty === "normal" ? normalAttempts : hardAttempts;
   const currentHistory = difficulty === "normal" ? normalHistory : hardHistory;
   const isLockedToday = difficulty === "normal" ? normalLocked : hardLocked;
-  const savedPhoto = difficulty === "normal" ? normalSavedPhoto : hardSavedPhoto;
+  const currentDailySavedPhoto = difficulty === "normal" ? normalSavedPhoto : hardSavedPhoto;
+  const playerHex = gameMode === "daily" ? dailyPlayerHex : seekerPlayerHex;
 
   const STATIC_STATS_KEY = "colour-hunter-global-stats-v2";
   const STATIC_STREAK_KEY = "colour-hunter-global-streak-v1";
@@ -68,89 +75,118 @@ export default function Home() {
     return new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
   };
 
-  const parseDatasetModeColor = async (modeSelection: "normal" | "hard") => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/today");
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API transaction failed with status ${response.status}: ${errorText}`);
-      }
+  // ==========================================
+  // UNIFIED DATA LOADING ENGINE
+  // ==========================================
 
-      const fullList: DailyColour[] = await response.json();
-
-      const filteredPool = fullList.filter((_, index) =>
-        modeSelection === "normal" ? index % 2 !== 0 : index % 2 === 0
-      );
-
-      if (filteredPool.length === 0) {
-        throw new Error("Filtered color pool generated an empty array matrix.");
-      }
-
-      const dayIndex = new Date().getDate() % filteredPool.length;
-      const selectedColor = filteredPool[dayIndex];
-      setActiveTarget(selectedColor);
-
-      const storageKey = getDailyStorageKey(modeSelection);
-      const savedSessionData = localStorage.getItem(storageKey);
-      const limitCap = modeSelection === "hard" ? 15 : 20;
-
-      if (savedSessionData) {
-        const parsed = JSON.parse(savedSessionData);
-        if (modeSelection === "normal") {
-          setNormalAttempts(parsed.attempts || 0);
-          setNormalHistory(parsed.historyBlocks || []);
-          setNormalLocked(parsed.isLocked || false);
-          setNormalSavedPhoto(parsed.photoDataUrl || "");
-        } else {
-          setHardAttempts(parsed.attempts || 0);
-          setHardHistory(parsed.historyBlocks || []);
-          setHardLocked(parsed.isLocked || false);
-          setHardSavedPhoto(parsed.photoDataUrl || "");
-        }
-
-        setFinalScore(parsed.score || 0);
-
-        if (parsed.isVictory) {
-          setPlayerHex(parsed.playerHex);
-          setGameMessage(`🎯 Complete! Match found in ${parsed.attempts} Photos!`);
-          setMessageColor("text-emerald-400 font-bold");
-        } else if ((parsed.attempts || 0) >= limitCap) {
-          setPlayerHex(parsed.playerHex || null);
-          setGameMessage(`❌ Game Over! Out of attempts (${parsed.attempts}/${limitCap})!`);
-          setMessageColor("text-rose-500 font-bold");
-        } else {
-          setPlayerHex(null);
-          setGameMessage(`Keep hunting! Photos taken: ${parsed.attempts}/${limitCap}`);
-          setMessageColor("text-amber-400 font-medium");
-        }
-      } else {
-        if (modeSelection === "normal") {
-          setNormalAttempts(0);
-          setNormalHistory([]);
-          setNormalLocked(false);
-          setNormalSavedPhoto("");
-        } else {
-          setHardAttempts(0);
-          setHardHistory([]);
-          setHardLocked(false);
-          setHardSavedPhoto("");
-        }
-        setPlayerHex(null);
-        setFinalScore(0);
-        setGameMessage("Aim and take your Photo!");
-        setMessageColor("text-slate-400");
-      }
-    } catch (err) {
-      console.error("Failed to map color indices:", err);
-      setGameMessage("Error loading color dataset.");
-      setMessageColor("text-rose-500");
-    } finally {
-      setIsLoading(false);
+  const parseCSVLine = (line: string) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') inQuotes = !inQuotes;
+        else if (line[i] === ',' && !inQuotes) { result.push(current); current = ''; } 
+        else current += line[i];
     }
+    result.push(current);
+    return result;
   };
 
   useEffect(() => {
+    const loadSharedGameData = async () => {
+      try {
+        setIsLoading(true);
+
+        const response = await fetch('/data/color_names.csv');
+        if (!response.ok) throw new Error("Failed to load CSV Database");
+        const csvText = await response.text();
+        const lines = csvText.split('\n').filter(line => line.trim() !== '');
+        
+        const parsedColours: DailyColour[] = lines.slice(1).map(line => {
+            const parts = parseCSVLine(line);
+            return {
+                name: parts[0].trim(),
+                hex: parts[1].trim(),
+                r: parseInt(parts[2], 10),
+                g: parseInt(parts[3], 10),
+                b: parseInt(parts[4], 10)
+            };
+        }).filter(c => !isNaN(c.r) && c.name);
+
+        setColourDatabase(parsedColours);
+
+        // --- SETUP DAILY MODE TARGET ---
+        const filteredPool = parsedColours.filter((_, index) =>
+          difficulty === "normal" ? index % 2 !== 0 : index % 2 === 0
+        );
+
+        const now = new Date();
+        const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+        const dayIndex = dayOfYear % filteredPool.length;
+        const dailyColor = filteredPool[dayIndex];
+        
+        setActiveTarget(dailyColor);
+        console.log(`[DAILY MODE TARGET] Name: ${dailyColor.name} | Hex: ${dailyColor.hex}`);
+
+        // --- LOAD DAILY LOCAL STORAGE PROGRESS ---
+        const storageKey = getDailyStorageKey(difficulty);
+        const savedSessionData = localStorage.getItem(storageKey);
+        const limitCap = difficulty === "hard" ? 15 : 20;
+
+        if (savedSessionData) {
+          const parsed = JSON.parse(savedSessionData);
+          if (difficulty === "normal") {
+            setNormalAttempts(parsed.attempts || 0); setNormalHistory(parsed.historyBlocks || []); setNormalLocked(parsed.isLocked || false); setNormalSavedPhoto(parsed.photoDataUrl || "");
+          } else {
+            setHardAttempts(parsed.attempts || 0); setHardHistory(parsed.historyBlocks || []); setHardLocked(parsed.isLocked || false); setHardSavedPhoto(parsed.photoDataUrl || "");
+          }
+          setFinalScore(parsed.score || 0);
+
+          if (parsed.isVictory) {
+            setDailyPlayerHex(parsed.playerHex);
+            setGameMessage(`🎯 Complete! Match found in ${parsed.attempts} Photos!`);
+            setMessageColor("text-emerald-400 font-bold");
+          } else if ((parsed.attempts || 0) >= limitCap) {
+            setDailyPlayerHex(parsed.playerHex || null);
+            setGameMessage(`❌ Game Over! Out of attempts (${parsed.attempts}/${limitCap})!`);
+            setMessageColor("text-rose-500 font-bold");
+          } else {
+            setDailyPlayerHex(null);
+            setGameMessage(`Keep hunting! Photos taken: ${parsed.attempts}/${limitCap}`);
+            setMessageColor("text-amber-400 font-medium");
+          }
+        } else {
+          // Reset if no saved data
+          if (difficulty === "normal") { setNormalAttempts(0); setNormalHistory([]); setNormalLocked(false); setNormalSavedPhoto(""); }
+          else { setHardAttempts(0); setHardHistory([]); setHardLocked(false); setHardSavedPhoto(""); }
+          setDailyPlayerHex(null);
+          setFinalScore(0);
+          setGameMessage("Aim and take your Photo!");
+          setMessageColor("text-slate-400");
+        }
+
+        // --- SETUP SEEKER MODE TARGET (On first load only) ---
+        setSeekerTarget((prev) => {
+            if (!prev) {
+                const randomColor = parsedColours[Math.floor(Math.random() * parsedColours.length)];
+                console.log(`[SEEKER MODE TARGET] Name: ${randomColor.name} | Hex: ${randomColor.hex}`);
+                return randomColor;
+            }
+            return prev;
+        });
+
+      } catch (err) {
+        console.error("Initialization Failed:", err);
+        setGameMessage("Error loading color dataset.");
+        setMessageColor("text-rose-500");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSharedGameData();
+
+    // Stats & Streak loading
     const savedStats = localStorage.getItem(STATIC_STATS_KEY);
     if (savedStats) setGlobalStats(JSON.parse(savedStats));
 
@@ -165,95 +201,98 @@ export default function Home() {
       }
     }
     setStreak(activeStreak);
-    parseDatasetModeColor(difficulty);
-  }, [difficulty]);
 
-  // Dynamic share code engine block generator
-  useEffect(() => {
-    if (isLockedToday && activeTarget && currentHistory.length > 0) {
-      const currentDateString = getFormattedDate();
-      let chunkedGrid = "";
-      for (let i = 0; i < currentHistory.length; i += 5) {
-        chunkedGrid += currentHistory.slice(i, i + 5).join(" ") + "\n";
+  }, [difficulty]); 
+
+  // ==========================================
+  // UI HANDLERS & RESET LOGIC
+  // ==========================================
+
+  const handleDifficultyChange = (selectedMode: "normal" | "hard") => {
+    setDifficulty(selectedMode);
+    
+    // Completely wipe the Seeker mode state when they switch difficulties
+    if (colourDatabase.length > 0) {
+      const randomColor = colourDatabase[Math.floor(Math.random() * colourDatabase.length)];
+      setSeekerTarget(randomColor);
+      setSeekerAttempts(0);
+      setIsSeekerVictory(false);
+      setSeekerPlayerHex(null); 
+      setSeekerSavedPhoto("");
+      setSeekerHint("Waiting for first scan...");
+      
+      if (gameMode === "seeker") {
+          setGameMessage("Take your first blind photo to get a hint!");
+          setMessageColor("text-slate-400");
       }
-      const scoreOutputLabel = finalScore >= 80 ? `${finalScore}%` : "Failed (Max Photos Taken)";
-      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${currentAttempts}/${maxAttemptsAllowed} Photos [Mode: ${gameMode.toUpperCase()} - ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${scoreOutputLabel} [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
-      setPreviewText(text);
+      console.log(`[NEW SEEKER TARGET (${selectedMode})] Name: ${randomColor.name} | Hex: ${randomColor.hex}`);
     }
-  }, [isLockedToday, activeTarget, currentHistory, currentAttempts, finalScore, streak, playerHex, difficulty, maxAttemptsAllowed, gameMode]);
-
-  const updateGlobalStatsProfile = (wonMode: "normal" | "hard" | null, attemptAdded: boolean) => {
-    setGlobalStats((prev) => {
-      const nextDaysComplete = wonMode ? prev.daysComplete + 1 : prev.daysComplete;
-      const nextTotalAttempts = attemptAdded ? prev.totalAttempts + 1 : prev.totalAttempts;
-
-      const next = {
-        daysComplete: nextDaysComplete,
-        easyWins: wonMode === "normal" ? prev.easyWins + 1 : prev.easyWins,
-        hardWins: wonMode === "hard" ? prev.hardWins + 1 : prev.hardWins,
-        totalAttempts: nextTotalAttempts,
-        successRate: nextTotalAttempts > 0 ? Math.round((nextDaysComplete / nextTotalAttempts) * 100) : 0
-      };
-      localStorage.setItem(STATIC_STATS_KEY, JSON.stringify(next));
-      return next;
-    });
   };
 
-  const handleRestartDayAction = () => {
-    const confirmWipe = window.confirm(`Reset today's progress for ${difficulty.toUpperCase()} mode?`);
-    if (!confirmWipe) return;
-
-    localStorage.removeItem(getDailyStorageKey(difficulty));
-    if (difficulty === "normal") {
-      setNormalAttempts(0);
-      setNormalHistory([]);
-      setNormalLocked(false);
-      setNormalSavedPhoto("");
-    } else {
-      setHardAttempts(0);
-      setHardHistory([]);
-      setHardLocked(false);
-      setHardSavedPhoto("");
-    }
-    setPlayerHex(null);
-    setFinalScore(0);
-    setGameMessage("Aim and take your Photo!");
+  const pickNewSeekerTarget = () => {
+    if (colourDatabase.length === 0) return;
+    const randomColor = colourDatabase[Math.floor(Math.random() * colourDatabase.length)];
+    setSeekerTarget(randomColor);
+    setSeekerAttempts(0);
+    setIsSeekerVictory(false);
+    setSeekerPlayerHex(null); 
+    setSeekerSavedPhoto("");
+    setSeekerHint("Waiting for first scan...");
+    setGameMessage("Take your first blind photo to get a hint!");
     setMessageColor("text-slate-400");
-    parseDatasetModeColor(difficulty);
+    console.log(`[SEEKER MODE TARGET] Name: ${randomColor.name} | Hex: ${randomColor.hex}`);
   };
 
-  const handleReset = () => {
-    setPlayerHex(null);
-    setGameMessage(`Aim and take your Photo! (Photos taken: ${currentAttempts}/${maxAttemptsAllowed})`);
-    setMessageColor("text-slate-400 font-normal");
-  };
-
-  const handleCopyClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(previewText);
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 3000);
-    } catch (err) {
-      console.error("Clipboard copy failure:", err);
+  // Handle Game Mode Switching Messages
+  useEffect(() => {
+    if (gameMode === "daily") {
+       if (isLockedToday) {
+           setGameMessage(`Match complete in ${currentAttempts} Photos!`);
+           setMessageColor("text-emerald-400 font-bold");
+       } else if (currentAttempts === 0) {
+           setGameMessage(`Aim and take your Photo! (${currentAttempts}/${maxAttemptsAllowed})`);
+           setMessageColor("text-slate-400");
+       }
+    } else {
+       if (isSeekerVictory) {
+           setGameMessage(`🎯 Target Found: ${seekerTarget?.name}!`);
+           setMessageColor("text-emerald-400 font-extrabold");
+       } else if (seekerAttempts === 0) {
+           setGameMessage("Take your first blind photo to get a hint!");
+           setMessageColor("text-slate-400");
+       }
     }
-  };
+  }, [gameMode]); 
 
-  const handleCopyImageToClipboard = async () => {
-    if (!savedPhoto) return;
-    try {
-      const base64Response = await fetch(savedPhoto);
-      const imageBlob = await base64Response.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [imageBlob.type]: imageBlob })
-      ]);
-      setImageCopied(true);
-      setTimeout(() => setImageCopied(false), 3000);
-    } catch (error) {
-      console.error("Image clipboard copying failed:", error);
+
+  // ==========================================
+  // SHARED GAME ENGINE LOGIC
+  // ==========================================
+
+  const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string, rawR: number, rawG: number, rawB: number) => {
+    // ---- HEX SEEKER LOGIC ----
+    if (gameMode === "seeker") {
+      if (isSeekerVictory || !seekerTarget) return;
+      const newAttempts = seekerAttempts + 1;
+      setSeekerAttempts(newAttempts);
+      setSeekerPlayerHex(detectedColour);
+      setSeekerSavedPhoto(photoDataUrl);
+
+      if (score >= 80) {
+          setIsSeekerVictory(true);
+          setGameMessage(`🎯 Target Found: ${seekerTarget.name}!`);
+          setSeekerHint(`Perfect match found in ${newAttempts} shots!`);
+          setMessageColor("text-emerald-400 font-extrabold");
+      } else {
+          const hint = generateSeekerHint(rawR, rawG, rawB, seekerTarget.r, seekerTarget.g, seekerTarget.b);
+          setGameMessage(`${score}% Match. Keep hunting!`);
+          setSeekerHint(hint);
+          setMessageColor("text-amber-400 font-medium");
+      }
+      return;
     }
-  };
 
-  const handlePhotoCaptured = (score: number, detectedColour: string, photoDataUrl: string) => {
+    // ---- DAILY MODE LOGIC ----
     if (currentAttempts >= maxAttemptsAllowed || isLockedToday) return;
 
     const newCount = currentAttempts + 1;
@@ -267,22 +306,14 @@ export default function Home() {
     const shouldLockGame = isVictoryMatch || isOutOfAttempts;
 
     if (difficulty === "normal") {
-      setNormalAttempts(newCount);
-      setNormalHistory(updatedBlocks);
-      if (shouldLockGame) {
-        setNormalLocked(true);
-        setNormalSavedPhoto(photoDataUrl);
-      }
+      setNormalAttempts(newCount); setNormalHistory(updatedBlocks);
+      if (shouldLockGame) { setNormalLocked(true); setNormalSavedPhoto(photoDataUrl); }
     } else {
-      setHardAttempts(newCount);
-      setHardHistory(updatedBlocks);
-      if (shouldLockGame) {
-        setHardLocked(true);
-        setHardSavedPhoto(photoDataUrl);
-      }
+      setHardAttempts(newCount); setHardHistory(updatedBlocks);
+      if (shouldLockGame) { setHardLocked(true); setHardSavedPhoto(photoDataUrl); }
     }
 
-    setPlayerHex(detectedColour);
+    setDailyPlayerHex(detectedColour); 
     setFinalScore(isVictoryMatch ? score : 0);
     updateGlobalStatsProfile(isVictoryMatch ? difficulty : null, true);
 
@@ -305,10 +336,82 @@ export default function Home() {
     } else {
       setGameMessage(`❌ Only a ${score}% Match — Try Again!`);
       setMessageColor("text-rose-400 font-semibold");
-      setTimeout(() => {
-        handleReset();
-      }, 2000);
     }
+  };
+
+  // ==========================================
+  // UTILITIES & RENDER
+  // ==========================================
+
+  const updateGlobalStatsProfile = (wonMode: "normal" | "hard" | null, attemptAdded: boolean) => {
+    setGlobalStats((prev) => {
+      const nextDaysComplete = wonMode ? prev.daysComplete + 1 : prev.daysComplete;
+      const nextTotalAttempts = attemptAdded ? prev.totalAttempts + 1 : prev.totalAttempts;
+      const next = {
+        daysComplete: nextDaysComplete,
+        easyWins: wonMode === "normal" ? prev.easyWins + 1 : prev.easyWins,
+        hardWins: wonMode === "hard" ? prev.hardWins + 1 : prev.hardWins,
+        totalAttempts: nextTotalAttempts,
+        successRate: nextTotalAttempts > 0 ? Math.round((nextDaysComplete / nextTotalAttempts) * 100) : 0
+      };
+      localStorage.setItem(STATIC_STATS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleRestartDayAction = () => {
+    const confirmWipe = window.confirm(`Reset today's progress for ${difficulty.toUpperCase()} mode?`);
+    if (!confirmWipe) return;
+
+    localStorage.removeItem(getDailyStorageKey(difficulty));
+    if (difficulty === "normal") {
+      setNormalAttempts(0); setNormalHistory([]); setNormalLocked(false); setNormalSavedPhoto("");
+    } else {
+      setHardAttempts(0); setHardHistory([]); setHardLocked(false); setHardSavedPhoto("");
+    }
+    setDailyPlayerHex(null);
+    setFinalScore(0);
+    
+    // Quick reload toggle to refresh the target
+    setDifficulty((prev) => prev === "normal" ? "hard" : "normal"); 
+    setTimeout(() => setDifficulty(difficulty), 50); 
+  };
+
+  const handleReset = () => {
+    setDailyPlayerHex(null);
+  };
+
+  // Dynamic share code generator
+  useEffect(() => {
+    if (isLockedToday && activeTarget && currentHistory.length > 0 && gameMode === "daily") {
+      const currentDateString = getFormattedDate();
+      let chunkedGrid = "";
+      for (let i = 0; i < currentHistory.length; i += 5) {
+        chunkedGrid += currentHistory.slice(i, i + 5).join(" ") + "\n";
+      }
+      const scoreOutputLabel = finalScore >= 80 ? `${finalScore}%` : "Failed (Max Photos Taken)";
+      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${currentAttempts}/${maxAttemptsAllowed} Photos [Mode: ${gameMode.toUpperCase()} - ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${scoreOutputLabel} [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
+      setPreviewText(text);
+    }
+  }, [isLockedToday, activeTarget, currentHistory, currentAttempts, finalScore, streak, playerHex, difficulty, maxAttemptsAllowed, gameMode]);
+
+  const handleCopyClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(previewText);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch (err) {}
+  };
+
+  const handleCopyImageToClipboard = async () => {
+    if (!currentDailySavedPhoto) return;
+    try {
+      const base64Response = await fetch(currentDailySavedPhoto);
+      const imageBlob = await base64Response.blob();
+      await navigator.clipboard.write([new ClipboardItem({ [imageBlob.type]: imageBlob })]);
+      setImageCopied(true);
+      setTimeout(() => setImageCopied(false), 3000);
+    } catch (error) {}
   };
 
   return (
@@ -365,47 +468,77 @@ export default function Home() {
       {/* Difficulty Selector Row */}
       <div className="w-full max-w-[400px] grid grid-cols-2 p-1.5 bg-slate-900 rounded-2xl mb-5 text-sm font-black tracking-wider">
         <button
-          onClick={() => setDifficulty("normal")}
+          onClick={() => handleDifficultyChange("normal")}
           className={`py-[14px] rounded-xl transition-all ${difficulty === "normal" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"}`}
         >
           📘 Normal
         </button>
         <button
-          onClick={() => setDifficulty("hard")}
+          onClick={() => handleDifficultyChange("hard")}
           className={`py-[14px] rounded-xl transition-all ${difficulty === "hard" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"}`}
         >
           🧠  Hard
         </button>
       </div>
+
       {isLoading ? (
         <div className="h-[200px] flex items-center justify-center">
           <div className="w-8 h-8 animate-spin border-2 border-t-transparent border-white rounded-full" />
         </div>
       ) : (
         <>
+          {/* DYNAMIC RENDER: Shows standard Scoreboard for Daily, Custom layout for Seeker */}
           {gameMode === "daily" ? (
             <Scoreboard activeTarget={activeTarget} playerHex={playerHex} />
           ) : (
-            <div className="w-full max-w-[400px] grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[140px] shadow-lg">
-                <span className="text-[10px] font-bold text-slate-500 tracking-widest">Your Colour</span>
-                <div
-                  className="w-12 h-12 rounded-xl mt-3 shadow-inner"
-                  style={{ backgroundColor: playerHex || "#1e293b" }}
-                />
-                <span className="text-xs font-mono font-black mt-2 text-slate-300">{playerHex || "#------"}</span>
+            <div className="w-full max-w-[400px] flex flex-col gap-3 mb-6">
+              
+              {/* FIXED: Hex Seeker Side-by-Side Target/Player Display */}
+              {/* Removed ALL Tailwind transition classes to ensure React inline styles apply instantly! */}
+              <div className="bg-slate-900 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+                  <div className="flex flex-col items-center w-1/3">
+                      <span className="text-[10px] font-bold text-slate-500 tracking-widest">TARGET</span>
+                      <div
+                        className="w-12 h-12 rounded-xl mt-2 shadow-inner border border-slate-700 flex items-center justify-center text-xl"
+                        style={{ backgroundColor: (isSeekerVictory && seekerTarget) ? seekerTarget.hex : "#1e293b" }}
+                      >
+                          {!isSeekerVictory && "❓"}
+                      </div>
+                      <span className="text-xs font-mono font-black mt-2 text-slate-300 text-center truncate w-full">
+                        {isSeekerVictory && seekerTarget ? seekerTarget.hex.toUpperCase() : "HIDDEN"}
+                      </span>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center w-1/3">
+                      <div className={`w-10 h-10 rounded-full ${isSeekerVictory ? 'bg-emerald-500/20' : 'bg-slate-950'} flex items-center justify-center text-lg`}>
+                        {isSeekerVictory ? "🏆" : "📡"}
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col items-center w-1/3">
+                      <span className="text-[10px] font-bold text-slate-500 tracking-widest">YOURS</span>
+                      <div
+                        className="w-12 h-12 rounded-xl mt-2 shadow-inner border border-slate-700"
+                        style={{ backgroundColor: seekerPlayerHex || "#1e293b" }}
+                      />
+                      <span className="text-xs font-mono font-black mt-2 text-slate-300 text-center truncate w-full">
+                        {seekerPlayerHex ? seekerPlayerHex.toUpperCase() : "#------"}
+                      </span>
+                  </div>
               </div>
 
-              <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[140px] shadow-lg text-center">
-                <span className="text-[10px] font-bold text-slate-500 tracking-widest">Navigation Logs</span>
-                <div className="w-8 h-8 rounded-full bg-slate-950 flex items-center justify-center mt-3 text-sm">📡</div>
-                <span className="text-[11px] font-bold text-slate-400 mt-2 leading-tight">Waiting for first scan...</span>
+              {/* Hex Seeker Nav Hint */}
+              <div className={`bg-slate-900 rounded-2xl p-3 flex flex-col items-center justify-center shadow-lg text-center border-2 ${isSeekerVictory ? 'border-emerald-500/50' : 'border-transparent'}`}>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-1">Navigation Log</span>
+                  <span className={`text-xs md:text-sm font-bold leading-tight ${isSeekerVictory ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {seekerHint}
+                  </span>
               </div>
             </div>
           )}
 
-          {/* Share panel */}
-          {isLockedToday && (
+          {/* Share panel (Daily Only) */}
+          {isLockedToday && gameMode === "daily" && (
             <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center z-20">
               <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-4 uppercase">Share Your Results</h3>
               <div className="grid grid-cols-2 gap-3 w-full mb-4">
@@ -428,21 +561,31 @@ export default function Home() {
           </div>
 
           <Viewfinder
-            activeTarget={activeTarget}
+            activeTarget={gameMode === "daily" ? activeTarget : seekerTarget}
             onPhotoCaptured={handlePhotoCaptured}
-            isLockedToday={isLockedToday}
-            savedPhoto={savedPhoto}
+            isLockedToday={gameMode === "daily" ? isLockedToday : isSeekerVictory}
+            savedPhoto={gameMode === "daily" ? currentDailySavedPhoto : seekerSavedPhoto}
             onReset={handleReset}
             difficulty={difficulty}
           />
 
-          {currentAttempts > 0 && (
+          {/* Reset Buttons based on active mode */}
+          {gameMode === "daily" && currentAttempts > 0 && (
             <button
               onClick={handleRestartDayAction}
               className="mt-6 text-[11px] py-[14px] font-black tracking-widest text-rose-500/70 hover:text-rose-400 hover:underline transition-all cursor-pointer"
             >
               ⚠️ Restart Today ({difficulty.toUpperCase()})
             </button>
+          )}
+
+          {gameMode === "seeker" && isSeekerVictory && (
+             <button
+                onClick={pickNewSeekerTarget}
+                className="mt-6 w-full max-w-[400px] py-[16px] bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl shadow-xl tracking-widest text-base transition-all"
+             >
+                🔎 Hunt a New Colour
+             </button>
           )}
         </>
       )}

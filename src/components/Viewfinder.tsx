@@ -6,7 +6,7 @@ import { DailyColour } from "../types";
 
 interface ViewfinderProps {
   activeTarget: DailyColour | null;
-  onPhotoCaptured: (score: number, playerHex: string, photoDataUrl: string) => void;
+  onPhotoCaptured: (score: number, hex: string, dataUrl: string, r: number, g: number, b: number) => void;
   isLockedToday: boolean;
   savedPhoto: string;
   onReset: () => void;
@@ -188,9 +188,10 @@ export default function Viewfinder({
       difficulty
     );
 
+
     setLocalPhotoUrl(dataURL);
     setIsShowingPhoto(true);
-    onPhotoCaptured(matchScore, playerHexOutputStr, dataURL);
+    onPhotoCaptured(matchScore, playerHexOutputStr, dataURL, detectedR, detectedG, detectedB);
   };
 
   return (
