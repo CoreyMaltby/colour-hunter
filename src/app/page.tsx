@@ -44,7 +44,7 @@ export default function Home() {
   const [seekerPlayerHex, setSeekerPlayerHex] = useState<string | null>(null);
   const [seekerAttempts, setSeekerAttempts] = useState<number>(0);
   const [isSeekerVictory, setIsSeekerVictory] = useState<boolean>(false);
-  const [seekerHint, setSeekerHint] = useState<string>("Waiting for first scan...");
+  const [seekerHint, setSeekerHint] = useState<string>("Waiting for first photo...");
   const [seekerSavedPhoto, setSeekerSavedPhoto] = useState<string>("");
 
   // Stats and Sharing
@@ -55,6 +55,7 @@ export default function Home() {
   const [previewText, setPreviewText] = useState<string>("");
   const [shareCopied, setShareCopied] = useState<boolean>(false);
   const [imageCopied, setImageCopied] = useState<boolean>(false);
+  const [seekerPreviewText, setSeekerPreviewText] = useState<string>("");
 
   const maxAttemptsAllowed = difficulty === "hard" ? 15 : 20;
   const currentAttempts = difficulty === "normal" ? normalAttempts : hardAttempts;
@@ -65,6 +66,9 @@ export default function Home() {
 
   const STATIC_STATS_KEY = "colour-hunter-global-stats-v2";
   const STATIC_STREAK_KEY = "colour-hunter-global-streak-v1";
+
+  const activePreviewText = gameMode === "daily" ? previewText : seekerPreviewText;
+  const activeSavedPhoto = gameMode === "daily" ? currentDailySavedPhoto : seekerSavedPhoto;
 
   const getDailyStorageKey = (mode: "normal" | "hard") => {
     const d = new Date();
@@ -357,30 +361,37 @@ export default function Home() {
 
   // Dynamic share code generator
   useEffect(() => {
-    if (isLockedToday && activeTarget && currentHistory.length > 0 && gameMode === "daily") {
+    if (isLockedToday && activeTarget && currentHistory.length > 0) {
       const currentDateString = getFormattedDate();
       let chunkedGrid = "";
       for (let i = 0; i < currentHistory.length; i += 5) {
         chunkedGrid += currentHistory.slice(i, i + 5).join(" ") + "\n";
       }
       const scoreOutputLabel = finalScore >= 80 ? `${finalScore}%` : "Failed (Max Photos Taken)";
-      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${currentAttempts}/${maxAttemptsAllowed} Photos [Mode: ${gameMode.toUpperCase()} - ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${scoreOutputLabel} [${playerHex ? playerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
+      const text = `🎯 Colour Hunter • ${currentDateString} • ${activeTarget.name} (${activeTarget.hex.toUpperCase()})\n🔥 ${streak} Day Streak • ${currentAttempts}/${maxAttemptsAllowed} Photos [Mode: ${gameMode.toUpperCase()} - ${difficulty.toUpperCase()}]\n🏆 Final Accuracy: ${scoreOutputLabel} [${dailyPlayerHex ? dailyPlayerHex.toUpperCase() : ""}]\n\n${chunkedGrid.trim()}\n\nhttps://colour-hunter.vercel.app/`;
       setPreviewText(text);
     }
-  }, [isLockedToday, activeTarget, currentHistory, currentAttempts, finalScore, streak, playerHex, difficulty, maxAttemptsAllowed, gameMode]);
+  }, [isLockedToday, activeTarget, currentHistory, currentAttempts, finalScore, streak, dailyPlayerHex, difficulty, maxAttemptsAllowed, gameMode]);
+
+  useEffect(() => {
+    if (isSeekerVictory && seekerTarget) {
+      const text = `🔎 Colour Hunter • Hex Seeker\n🎯 Target: ${seekerTarget.name} (${seekerTarget.hex.toUpperCase()})\n📸 Shots Taken: ${seekerAttempts} [Mode: ${difficulty.toUpperCase()}]\n🏆 Final Match: ${seekerPlayerHex ? seekerPlayerHex.toUpperCase() : ""}\n\nhttps://colour-hunter.vercel.app/`;
+      setSeekerPreviewText(text);
+    }
+  }, [isSeekerVictory, seekerTarget, seekerAttempts, seekerPlayerHex, difficulty]);
 
   const handleCopyClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(previewText);
+      await navigator.clipboard.writeText(activePreviewText);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 3000);
     } catch (err) { }
   };
 
   const handleCopyImageToClipboard = async () => {
-    if (!currentDailySavedPhoto) return;
+    if (!activeSavedPhoto) return;
     try {
-      const base64Response = await fetch(currentDailySavedPhoto);
+      const base64Response = await fetch(activeSavedPhoto);
       const imageBlob = await base64Response.blob();
       await navigator.clipboard.write([new ClipboardItem({ [imageBlob.type]: imageBlob })]);
       setImageCopied(true);
@@ -464,7 +475,7 @@ export default function Home() {
 
               <div className="bg-slate-900 rounded-2xl p-4 flex items-center justify-between shadow-lg">
                 <div className="flex flex-col items-center w-1/3">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-widest">TARGET</span>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-widest">Target</span>
                   <div
                     className="w-12 h-12 rounded-xl mt-2 shadow-inner border border-slate-700 flex items-center justify-center text-xl"
                     style={{ backgroundColor: (isSeekerVictory && seekerTarget) ? seekerTarget.hex : "#1e293b" }}
@@ -472,7 +483,7 @@ export default function Home() {
                     {!isSeekerVictory && "❓"}
                   </div>
                   <span className="text-xs font-mono font-black mt-2 text-slate-300 text-center truncate w-full">
-                    {isSeekerVictory && seekerTarget ? seekerTarget.hex.toUpperCase() : "HIDDEN"}
+                    {isSeekerVictory && seekerTarget ? seekerTarget.hex.toUpperCase() : "Hidden"}
                   </span>
                 </div>
 
@@ -483,10 +494,10 @@ export default function Home() {
                 </div>
 
                 <div className="flex flex-col items-center w-1/3">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-widest">YOURS</span>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-widest">Your Photo</span>
                   <div
                     className="w-12 h-12 rounded-xl mt-2 shadow-inner border border-slate-700"
-                    style={{ backgroundColor: seekerPlayerHex ? seekerPlayerHex : "#1e293b" }}
+                    style={{ backgroundColor: seekerPlayerHex || "#1e293b" }}
                   />
                   <span className="text-xs font-mono font-black mt-2 text-slate-300 text-center truncate w-full">
                     {seekerPlayerHex ? seekerPlayerHex.toUpperCase() : "#------"}
@@ -495,7 +506,7 @@ export default function Home() {
               </div>
 
               <div className={`bg-slate-900 rounded-2xl p-3 flex flex-col items-center justify-center shadow-lg text-center ${isSeekerVictory ? 'border-emerald-500/50' : 'border-transparent'}`}>
-                <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-1">Hints</span>
+                <span className="text-[14px] font-bold text-slate-500 tracking-widest mb-1">Hints</span>
                 <span className={`text-xs md:text-sm font-bold leading-tight ${isSeekerVictory ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {seekerHint}
                 </span>
@@ -503,9 +514,9 @@ export default function Home() {
             </div>
           )}
 
-          {isLockedToday && gameMode === "daily" && (
+          {((isLockedToday && gameMode === "daily") || (isSeekerVictory && gameMode === "seeker")) && (
             <div className="w-full max-w-[400px] mb-6 p-5 bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col items-center z-20">
-              <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-4 uppercase">Share Your Results</h3>
+              <h3 className="text-xs font-bold text-slate-400 tracking-widest mb-4 ">Share Your Results</h3>
               <div className="grid grid-cols-2 gap-3 w-full mb-4">
                 <button onClick={handleCopyClipboard} className="py-[14px] px-2 text-sm font-black rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white transition-all active:scale-95 cursor-pointer">
                   {shareCopied ? "✓ Text Copied!" : "📋 Copy Score Text"}
@@ -516,7 +527,7 @@ export default function Home() {
               </div>
               <div className="w-full text-left bg-slate-950 p-4 rounded-xl">
                 <p className="text-[10px] font-bold text-slate-500 tracking-widest mb-2 pb-1 border-b border-slate-900/40 uppercase">Clipboard Preview</p>
-                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap">{previewText}</pre>
+                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap">{activePreviewText}</pre>
               </div>
             </div>
           )}
