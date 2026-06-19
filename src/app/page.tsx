@@ -565,6 +565,15 @@ export default function Home() {
           )}
         </>
       )}
+
+      <footer className="w-full max-w-[400px] mt-12 mb-4 pt-6 border-t border-slate-800/50 flex flex-col items-center justify-center text-center">
+        <p className="text-[10px] text-slate-500 font-medium tracking-wide">
+          &copy; {new Date().getFullYear()} Colour Hunter.
+        </p>
+        <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-1.5 leading-relaxed max-w-[280px]">
+          Idea inspired by <a href="https://www.youtube.com/watch?v=hwt6P425Fjc" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors underline underline-offset-2">Atomic Shrimp</a>. Thank you for sharing your ideas!
+        </p>
+      </footer>
     </main>
   );
 }
